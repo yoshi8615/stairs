@@ -211,3 +211,11 @@ ARCHITECTURE §6 的決定紀錄。每一項影響哪些步驟：
 **C8　四種瀏覽器**
 - 做法：在最新版 Chrome、Edge、Firefox、Safari 各雙擊一次 `index.html`。
 - 通過：能新增專案、新增步驟、打勾，重新整理後資料還在。沒有 Safari 可測時，回報使用者這項沒做到，不可以當成通過。
+
+---
+
+## 4. 完成紀錄
+
+| 日期 | 內容 |
+|---|---|
+| 2026-10-05 | P1–P4 全部完成，§3 C1–C8 全部通過。`test.html` 41 項通過；另用無介面（headless）Chrome 自動操作檢查 84 項（SPEC §8、鍵盤操作、手機版面、觸控拖曳）。使用者在瀏覽器和手機上完成手動驗收。線上版：GitHub Pages（`https://yoshi8615.github.io/stairs/`）。實作時補上的決定見 ARCHITECTURE §6 A5–A8。 |
