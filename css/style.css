@@ -28,7 +28,8 @@
   /* P7T7: open / done switch (Claude-style segmented control) */
   --track: #ebe8df;
   --thumb: #ffffff;
-  --tabbar-space: 84px;
+  /* P7T10: room kept under the page for the fixed ≡ button */
+  --tabbar-space: 72px;
 }
 
 /* P3T1: dark mode follows the system setting; P5T1: near-black + brighter orange */
@@ -107,19 +108,77 @@ body {
   stroke: none;
 }
 
-/* P3T1: two-column layout (SPEC §5.1) */
+/* P3T1: layout; P7T10: one column for every width — only the open project, centered (SPEC v1.8 §5.1) */
 .layout {
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
   min-height: 100vh;
 }
 
-.sidebar {
+/* P7T10: project list as a drawer from the left (SPEC v1.8 F12, A17). It stays in the DOM;
+   closed = off-screen + inert, and the view transition slides it between the two. */
+.drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 8;
+  width: min(300px, 85vw);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  padding-left: calc(16px + env(safe-area-inset-left));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
   background: var(--sidebar);
   border-right: 1px solid var(--border);
-  padding: 24px 16px;
-  /* P7T7: the fixed switch never covers the last item */
-  padding-bottom: calc(24px + var(--tabbar-space) + env(safe-area-inset-bottom));
+  transform: translateX(-100%);
+  view-transition-name: drawer;
+}
+
+.drawer.is-open {
+  transform: none;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.25);
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.drawer-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 7;
+  background: var(--overlay);
+  view-transition-name: drawer-backdrop;
+}
+
+/* P7T10: round ≡ fixed at the bottom-left corner; .btn.drawer-btn so it beats the later .btn rule */
+.btn.drawer-btn {
+  position: fixed;
+  left: calc(16px + env(safe-area-inset-left));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 5;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: var(--shadow);
+  view-transition-name: drawer-btn;
+}
+
+.drawer-btn .icon {
+  width: 22px;
+  height: 22px;
 }
 
 /* P5T1: serif brand with the stairs mark */
@@ -127,7 +186,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 20px;
+  margin: 0;
   padding: 0 4px;
   font-family: var(--font-serif);
   font-size: 1.5rem;
@@ -144,6 +203,7 @@ body {
 .main {
   width: 100%;
   max-width: 760px;
+  margin: 0 auto;
   padding: 32px 40px;
   padding-bottom: calc(32px + var(--tabbar-space) + env(safe-area-inset-bottom));
 }
@@ -321,7 +381,7 @@ body {
 }
 
 .add-project {
-  flex-direction: column;
+  margin-top: 12px;
 }
 
 /* P3T1: project header and progress; P5T1: serif project name */
@@ -659,6 +719,14 @@ body.is-dragging {
   overflow-wrap: anywhere;
 }
 
+/* P7T11: calendar reminder under the project name */
+.celebrate-note {
+  position: relative;
+  margin: -12px 0 20px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 /* P3T9: pure CSS confetti, about 2 seconds */
 .confetti {
   position: absolute;
@@ -840,13 +908,9 @@ body.is-dragging {
   }
 }
 
-/* P7T7: open / done switch fixed at the bottom center (SPEC v1.6 F10, A15) */
+/* P7T7: open / done switch; P7T10: at the bottom of the drawer (A19) */
 .tabbar {
-  position: fixed;
-  left: 50%;
-  bottom: calc(16px + env(safe-area-inset-bottom));
-  z-index: 5;
-  transform: translateX(-50%);
+  margin-top: 12px;
 }
 
 .tabs {
@@ -877,7 +941,7 @@ body.is-dragging {
 
 .tab {
   position: relative;
-  min-width: 104px;
+  min-width: 0;
   min-height: 40px;
   padding: 0 18px;
   border: 0;
@@ -1063,7 +1127,7 @@ body.is-dragging {
   text-align: center;
 }
 
-/* P3T10: phone width, projects on top and steps below */
+/* P3T10: phone width; P7T10: same one-column layout, smaller margins */
 @media (max-width: 639.98px) {
   /* P5T3: shallower stairs so titles keep their width */
   /* P7T2: 1.5× the v1.5 phone indent */
@@ -1071,28 +1135,8 @@ body.is-dragging {
     --stair: 9px;
   }
 
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
-    min-height: 0;
-  }
-
-  .sidebar {
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-    padding: 16px;
-  }
-
-  .add-project {
-    flex-direction: row;
-  }
-
   .main {
     padding: 16px;
     padding-bottom: calc(16px + var(--tabbar-space) + env(safe-area-inset-bottom));
-  }
-
-  /* P7T7: on phones the sidebar sits on top, only the page bottom needs the room */
-  .sidebar {
-    padding-bottom: 16px;
   }
 }

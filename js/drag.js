@@ -136,6 +136,39 @@ Stairs.drag = (() => {
     if (drag) e.preventDefault();
   };
 
+  // P7T10: drawer swipes (SPEC v1.8 F12, A18). Passive touch events, not pointer events: the
+  // browser cancels pointers once it starts scrolling, but touch events keep coming.
+  const EDGE = 24;
+  const SWIPE = 60;
+  let swipe = null; // { x, y, dir }: +1 = open from the left edge, -1 = close on the drawer
+
+  const onSwipeStart = (e) => {
+    swipe = null;
+    if (drag || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const open = document.querySelector(".drawer.is-open");
+    if (open && open.contains(e.target)) swipe = { x: t.clientX, y: t.clientY, dir: -1 };
+    else if (!open && t.clientX <= EDGE) swipe = { x: t.clientX, y: t.clientY, dir: 1 };
+  };
+
+  const onSwipeMove = (e) => {
+    if (!swipe || drag) return;
+    const t = e.touches[0];
+    const dx = t.clientX - swipe.x;
+    const dy = t.clientY - swipe.y;
+    // mostly horizontal and far enough in the right direction
+    if (Math.abs(dx) < SWIPE || Math.abs(dx) < Math.abs(dy) * 1.5 || Math.sign(dx) !== swipe.dir) return;
+    const dir = swipe.dir;
+    swipe = null;
+    cancelPress(); // the swipe may have started on a step row
+    if (dir > 0) handlers.onOpenDrawer();
+    else handlers.onCloseDrawer();
+  };
+
+  const onSwipeEnd = () => {
+    swipe = null;
+  };
+
   // P7T3: long-press must not open the browser's text / link menu
   const onContextMenu = (e) => {
     if (press || drag) e.preventDefault();
@@ -148,6 +181,10 @@ Stairs.drag = (() => {
     root.addEventListener("pointerdown", onDown);
     root.addEventListener("touchmove", onTouchMove, { passive: false });
     root.addEventListener("contextmenu", onContextMenu);
+    document.addEventListener("touchstart", onSwipeStart, { passive: true });
+    document.addEventListener("touchmove", onSwipeMove, { passive: true });
+    document.addEventListener("touchend", onSwipeEnd, { passive: true });
+    document.addEventListener("touchcancel", onSwipeEnd, { passive: true });
   };
 
   return { init };

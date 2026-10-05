@@ -7,7 +7,8 @@ Stairs.app = (() => {
   // P3T1: the single state, plus in-memory ui state (never saved)
   let state = null;
   // P7T7: tab is "open" / "done" and always starts on "open" (SPEC v1.6 F10)
-  const ui = { editing: null, celebrate: null, storageWarning: false, focusKey: null, tab: "open" };
+  // P7T10: drawer is the hidden project list, closed on every load (SPEC v1.8 F12)
+  const ui = { editing: null, celebrate: null, storageWarning: false, focusKey: null, tab: "open", drawer: false };
   let celebrateReturnKey = null;
 
   const activeProject = () => state.projects.find((p) => p.id === state.activeProjectId) || null;
@@ -45,13 +46,20 @@ Stairs.app = (() => {
       if (name.trim() === "") return;
       Stairs.view.pickDeadline({ mode: "create", value: null }, (deadline) => {
         ui.tab = "open";
-        ui.focusKey = "add-project-input";
+        // P7T10: the new project opens with the drawer closed, ready for its first step
+        ui.drawer = false;
+        ui.focusKey = "add-step-input";
         Stairs.view.clearDraft("add-project");
         dispatch(S.createProject, name, deadline);
       });
     },
     onSelectProject: (projectId) => {
       ui.editing = null;
+      // P7T10: picking a project closes the drawer (SPEC v1.8 F12, §6)
+      if (ui.drawer) {
+        ui.drawer = false;
+        ui.focusKey = "drawer-btn";
+      }
       dispatch(S.setActiveProject, projectId);
     },
 
@@ -100,6 +108,22 @@ Stairs.app = (() => {
       Stairs.view.download(`${base}.ics`, text, "text/calendar;charset=utf-8");
     },
 
+    // P7T10: F12 drawer; focus goes to the open project in the list, else the add input (SPEC §6)
+    onOpenDrawer: () => {
+      if (ui.drawer) return;
+      ui.editing = null;
+      ui.drawer = true;
+      const visible = S.listProjects(state, ui.tab).some((p) => p.id === state.activeProjectId);
+      ui.focusKey = visible ? `project:${state.activeProjectId}` : "add-project-input";
+      render();
+    },
+    onCloseDrawer: () => {
+      if (!ui.drawer) return;
+      ui.drawer = false;
+      ui.focusKey = "drawer-btn";
+      render();
+    },
+
     // P7T7: F10 tab switch; keyboard focus follows the selected tab
     onSetTab: (tab) => {
       if (tab !== "open" && tab !== "done") return;
@@ -117,7 +141,8 @@ Stairs.app = (() => {
       const after = S.isProjectComplete(activeProject());
       if (!before && after) {
         celebrateReturnKey = Stairs.view.getFocusKey();
-        ui.celebrate = { projectName: p.name };
+        // P7T11: remind about the calendar event only when there could be one (A20)
+        ui.celebrate = { projectName: p.name, hasDeadline: p.deadline !== null };
       }
       render();
     },

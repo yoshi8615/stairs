@@ -1,6 +1,6 @@
 # Stairs 架構文件（ARCHITECTURE）
 
-> 對應規格：`SPEC.md` v1.7　｜　日期：2026-10-04（v1.6 的更新：2026-10-06）
+> 對應規格：`SPEC.md` v1.8　｜　日期：2026-10-04（v1.6 的更新：2026-10-06）
 
 ---
 
@@ -137,7 +137,12 @@ stairs/
 - `view.download(filename, text, type)`（v1.7）：用 `Blob` 和暫時的 `<a download>` 讓瀏覽器下載一個檔案（SPEC F11），之後釋放 Blob 網址。不判斷內容。
 - `view.clearDraft(name)`（v1.6）：清掉某個輸入框的草稿。新增專案框送出時 view **不再自己清空**，因為按取消要保留名稱（SPEC F8）；由 app 在真的建立後呼叫。新增步驟框照舊，送出就清空。
 - 側欄（v1.6）：用 `Stairs.state.listProjects(state, ui.tab)` 拿到排好的清單，畫出專案、日期分隔線（SPEC F9）或完成日期小字（SPEC F10）。分隔線不能拿到焦點；用 `role="separator"` 加 `aria-label`（例如「2026/10/05」），讓螢幕閱讀器讀得到日期。
-- 切換欄位（v1.6）：放在 `#app` 裡、側欄和主區外面，CSS `position: fixed` 在畫面最下面正中間。滑動的色塊是一個獨立的 `<span>`，用 class 決定它在左格或右格。整頁重畫會換掉元素，CSS transition 不會播，所以給它一個固定的 `view-transition-name`，讓 P6 的轉場把它從舊位置滑到新位置；不支援或減少動態效果時直接跳過去。
+- 專案列表抽屜（v1.8，SPEC F12，§6 A17）：側欄改成抽屜 `aside.drawer`，**一直在 DOM 裡**，`ui.drawer` 決定開或關。
+  - 關著：移到畫面外（`transform`）、`visibility: hidden`、`inert`。開著：滑進來，後面多一層半透明遮罩，`.main` 和 ≡ 按鈕設 `inert`。
+  - 抽屜有固定的 `view-transition-name`，所以開和關都由 P6 的轉場滑動，不用另外寫 JS 動畫。
+  - ≡ 按鈕：`position: fixed` 在左下角（加 `env(safe-area-inset-*)`），`aria-expanded`、`aria-controls`；`.main` 下方留出它的空間。
+  - Esc：抽屜開著、焦點不在改名輸入框時 → `handlers.onCloseDrawer()`。點遮罩、✕ 也一樣。
+- 切換欄位（v1.6；v1.8 起放在抽屜最下面，`position: sticky` 貼底，見 §6 A19）。滑動的色塊是一個獨立的 `<span>`，用 class 決定它在左格或右格。整頁重畫會換掉元素，CSS transition 不會播，所以給它一個固定的 `view-transition-name`，讓 P6 的轉場把它從舊位置滑到新位置；不支援或減少動態效果時直接跳過去。
 - Alt+↑ / Alt+↓（v1.6）：掛在 `#app` 的 `keydown` 委派。目標在某個未完成步驟列裡、且不是改名輸入框 → `preventDefault`，呼叫 `handlers.onMoveBy(stepId, ±1)`。
 - `picker.js`（v1.6）：只做日期時間選單的**內容**，不管 dialog。
   - `Stairs.picker.create(value)` → 回傳 `{ el, getValue() }`。`el` 是月曆＋小時滾輪的 DOM；`getValue()` 回傳 `YYYY-MM-DDTHH:00` 字串。
@@ -146,9 +151,11 @@ stairs/
   - 「現在的下一個整點」的預設值在這裡算（它需要讀現在時間，不屬於資料邏輯層）。
 - `drag.js`：用 Pointer Events 做拖曳。只負責「拖的過程」：半透明、放下位置的線、`touch-action`、算出 `toIndex`。放下位置限制在未完成區：拖到已完成區時，線停在未完成區最上面，`toIndex` 也修正成未完成區第一格（見 §6 A4）。放下時呼叫 `handlers.onMove(stepId, toIndex)`。
   - v1.6 起沒有把手，`pointerdown` 從**未完成步驟列**開始（勾選框、按鈕、輸入框上按下去不算）。怎麼分辨「拖」和「點／捲動」見 §6 A11。
+  - v1.8：抽屜的滑動手勢也在這裡（都是觸控手勢，放一起才能互相讓）。用被動的 `touchstart`／`touchmove`／`touchend`，不用 Pointer Events，因為瀏覽器開始捲動時會送 `pointercancel` 把手勢切斷。從左邊緣 24px 內開始、往右超過 60px 且橫向為主 → `handlers.onOpenDrawer()`；抽屜開著時在抽屜上往左超過 60px → `handlers.onCloseDrawer()`。步驟正在拖曳時不判斷（§6 A18）。
 - `style.css`：`:root` 的 CSS 變數、`prefers-color-scheme` 深色模式、`< 640px` 手機版面、40×40px 觸控區、彩帶動畫、`prefers-reduced-motion`。
   - v1.6：階梯上限 `--stair-max` 從 `8` 改成 `2`（第 3 階起都縮 2 格）；手機的 `--stair` 從 `6px` 改成 `9px`。
-  - v1.6：`body` 下方留出切換欄位的高度加上 `env(safe-area-inset-bottom)`；`index.html` 的 viewport 要加 `viewport-fit=cover`，`env()` 在 iPhone 上才有值。
+  - v1.6：`body` 下方留出切換欄位的高度加上 `env(safe-area-inset-bottom)`；`index.html` 的 viewport 要加 `viewport-fit=cover`，`env()` 在 iPhone 上才有值。（v1.8 起留的是左下角 ≡ 按鈕的空間。）
+  - v1.8：拿掉兩欄 grid 和 `< 640px` 上下排列；`.main` 水平置中，電腦和手機同一種版面，手機只有邊距較小。
 
 **可以依賴：**
 - 資料邏輯層的**唯讀查詢**函式：`getCurrentStepIndex`、`countDone`、`isProjectComplete`、`listProjects`。
@@ -214,10 +221,11 @@ stairs/
 | 欄位 | 型別 | 意思 |
 |---|---|---|
 | `editing` | `{ kind: "project" \| "step", id }` 或 `null` | 哪個名稱正在改名。 |
-| `celebrate` | `{ projectName }` 或 `null` | 慶祝彈窗是否打開。 |
+| `celebrate` | `{ projectName, hasDeadline }` 或 `null` | 慶祝彈窗是否打開。`hasDeadline`（v1.8）決定要不要顯示「記得到行事曆刪掉」那行（SPEC F5）。 |
+| `drawer` | boolean | 專案列表抽屜開著嗎（SPEC F12，v1.8）。啟動時是 `false`，不存檔。 |
 | `storageWarning` | boolean | 是否顯示「無法儲存，重新整理後資料會消失」。 |
 | `focusKey` | string 或 `null` | 重畫後要把焦點放在哪（見 §3.4）。 |
-| `tab` | `"open"` 或 `"done"` | 左邊顯示哪個分頁（SPEC F10）。啟動時是 `"open"`。 |
+| `tab` | `"open"` 或 `"done"` | 專案列表顯示哪個分頁（SPEC F10）。啟動時是 `"open"`。 |
 
 **`handlers` 物件**（由 app 提供給 view 和 drag）：
 
@@ -232,6 +240,9 @@ stairs/
 | `onEditDeadline()` | F8（v1.6） |
 | `onSetTab(tab)` | F10（v1.6） |
 | `onAddToCalendar()` | F11（v1.7） |
+| `onOpenDrawer()` / `onCloseDrawer()` | F12（v1.8） |
+
+抽屜和焦點（v1.8，SPEC §6）：`onOpenDrawer` 把 `ui.focusKey` 設成目前專案在列表裡的 key（看不到就 `add-project-input`）；`onCloseDrawer` 設成 `drawer-btn`；`onSelectProject` 也關抽屜、焦點到 `drawer-btn`；建立專案（完成或跳過）關抽屜、焦點到 `add-step-input`。
 
 `onMoveBy(stepId, delta)` 是鍵盤 Alt+↑ / Alt+↓ 用的（v1.5 以前是 ↑↓ 按鈕；`delta` 是 `-1` 或 `+1`），接線層把它換算成 `moveStep` 的 `toIndex`。移動後 `ui.focusKey` 設成移動前焦點所在的那個 key，焦點留在同一個控制項上。
 
@@ -318,5 +329,9 @@ stairs/
 | A12 | 拿掉 ↑↓ 按鈕後的鍵盤排序 | SPEC §6 要求所有功能都能只用鍵盤。 | **Alt+↑ / Alt+↓**（SPEC v1.6 F2）。沿用 `onMoveBy`，焦點留在原本的控制項上；勾選框因為變成鎖住而 disabled 時，改到同一步驟的 ✏️（SPEC v1.6 F2）。A5 裡「↑↓ 按鈕變 disabled 時焦點改到另一顆箭頭」那條規則跟著拿掉。 |
 | A13 | 已完成的專案怎麼判斷？舊資料的完成日期怎麼補？ | 使用者希望完成的專案不要消失，而是放到「已完成」。 | **自動判斷**：用 `isProjectComplete`，不另外存「已封存」旗標；`completedAt` 只用來顯示和排序（SPEC v1.6 §3.2 第二條）。舊資料讀進來時用讀取當下的時間補上。 |
 | A14 | 建立專案時在選單按「取消」 | 選單有「跳過」（建立、不設日期），「取消」要不要也建立？ | **不建立**，名稱保留在輸入框（SPEC v1.6 F8）。所以新增專案框送出時 view 不再自己清空，改由 app 呼叫 `view.clearDraft`。 |
-| A15 | 切換欄位放哪裡？ | 使用者希望放在整個畫面最下面。 | **`position: fixed` 在畫面最下面正中間**（SPEC v1.6 F10），`body` 下方留空間並避開 iPhone 的安全區域。彈窗打開時 `#app` 是 `inert`，切換欄位在 `#app` 裡，所以一起不能點。 |
+| A15 | 切換欄位放哪裡？（**v1.8 被 A19 取代**） | 使用者希望放在整個畫面最下面。 | **`position: fixed` 在畫面最下面正中間**（SPEC v1.6 F10），`body` 下方留空間並避開 iPhone 的安全區域。彈窗打開時 `#app` 是 `inert`，切換欄位在 `#app` 裡，所以一起不能點。 |
 | A16 | 行事曆檔（SPEC v1.7 F11）在哪裡產生、怎麼下載？ | Stairs 沒有伺服器，不能自己推播通知；改由行事曆 App 提醒。 | **`state.js` 的 `toIcs` 產生文字**（純函式，可以測），**`view.js` 用 Blob 下載**。格式照 RFC 5545：CRLF 換行；`,` `;` `\` 和換行要跳脫；每行最多 75 bytes，超過就折行（下一行開頭一個空白），不切斷中文字；`DTSTART` 不帶時區（和 A10 一樣是當地時間），不寫 `DTEND`（長度 0）；`VALARM` 用 `TRIGGER:-PT24H`；`UID` 是 `<專案 id>@stairs`；`DTSTAMP` 用產生當下的 UTC 時間。**風險**：iPhone 主畫面 App（獨立視窗）處理下載的方式和 Safari 不同，可能無法直接加入行事曆，要在真機上驗收；不行時請使用者改從 Safari 打開按一次。 |
+| A17 | 隱藏式專案列表（SPEC v1.8 F12）只給手機用，還是電腦也用？怎麼做？ | 使用者希望畫面中間只放目前的專案，保持整潔。 | **電腦和手機都用**，只有一種版面。抽屜一直在 DOM 裡、用 `ui.drawer` 開關，開關的滑動交給既有的 View Transitions；關著時 `inert`，開著時後面的 `.main` 和 ≡ 按鈕 `inert`。 |
+| A18 | 左邊緣右滑要怎麼偵測？ | Pointer Events 在瀏覽器開始捲動時會被 `pointercancel` 切斷；iPhone Safari 分頁的左邊緣右滑是「上一頁」。 | **在 `drag.js` 用被動的 touch 事件**判斷：從左邊 24px 內開始、往右超過 60px、橫向為主才打開；步驟拖曳中不判斷。Safari 分頁可能被「上一頁」搶走，這點寫進 SPEC F12，主畫面 App 不受影響，≡ 按鈕永遠可用。 |
+| A19 | 抽屜收起來後，未完成／已完成切換放哪？ | A15 原本固定在畫面最下面正中間；收起列表後，切換看不到它在換什麼。 | **搬進抽屜最下面**（`position: sticky` 貼底）。**取代 A15。** 畫面最下面只剩左下角的 ≡。 |
+| A20 | 專案完成後能不能自動刪掉 iPhone 行事曆裡的事件？ | 網頁沒有權限動行事曆；要自動同步必須有伺服器（訂閱網址），違反 SPEC §2。下載「取消事件」檔，iPhone 行事曆也不會處理。 | **不刪，改成提醒**：有截止日期的專案完成時，慶祝畫面多一行「記得到行事曆刪掉」（SPEC v1.8 F5）。`ui.celebrate` 多帶 `hasDeadline`。 |

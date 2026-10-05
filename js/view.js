@@ -36,6 +36,8 @@ Stairs.view = (() => {
     trash: '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
     bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+    menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
     calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
@@ -150,11 +152,21 @@ Stairs.view = (() => {
     return h("ul", { class: "project-list" }, out);
   };
 
-  // P3T2: project list and add-project form
-  const buildSidebar = (state, ui) =>
-    h("aside", { class: "sidebar" },
-      h("h1", { class: "brand" }, icon("stairs", "brand-icon"), "Stairs"),
-      h("nav", { id: "project-nav", "aria-label": ui.tab === "done" ? "已完成專案" : "未完成專案" },
+  // P3T2: project list and add-project form; P7T10: inside a drawer that is always in the DOM
+  // and only reachable while open (SPEC v1.8 F12, A17)
+  const buildDrawer = (state, ui) =>
+    h("aside", {
+      id: "project-drawer",
+      class: `drawer${ui.drawer ? " is-open" : ""}`,
+      role: ui.drawer ? "dialog" : null,
+      "aria-modal": ui.drawer ? "true" : null,
+      "aria-label": "專案列表",
+      inert: !ui.drawer,
+    },
+      h("div", { class: "drawer-head" },
+        h("h1", { class: "brand" }, icon("stairs", "brand-icon"), "Stairs"),
+        iconBtn("close", "關閉專案列表", "close-drawer", null, "drawer-close")),
+      h("nav", { id: "project-nav", class: "drawer-nav", "aria-label": ui.tab === "done" ? "已完成專案" : "未完成專案" },
         buildProjectItems(state, ui)),
       h("form", { class: "add-form add-project", "data-form": "add-project" },
         h("input", {
@@ -166,7 +178,22 @@ Stairs.view = (() => {
           "data-draft": "add-project",
           "data-focus-key": "add-project-input",
         }),
-        h("button", { type: "submit", class: "btn btn-primary", "data-focus-key": "add-project-submit" }, icon("plus"), "新增")));
+        h("button", { type: "submit", class: "btn btn-primary", "data-focus-key": "add-project-submit" }, icon("plus"), "新增")),
+      buildTabbar(ui));
+
+  // P7T10: ≡ in the bottom-left corner opens the drawer
+  const buildDrawerButton = (ui) =>
+    h("button", {
+      type: "button",
+      class: "btn drawer-btn",
+      "aria-label": "打開專案列表",
+      title: "專案列表",
+      "aria-expanded": ui.drawer ? "true" : "false",
+      "aria-controls": "project-drawer",
+      inert: ui.drawer,
+      "data-action": "open-drawer",
+      "data-focus-key": "drawer-btn",
+    }, icon("menu"));
 
   // P3T1: progress text and bar
   const buildProgress = (done, total) => {
@@ -248,7 +275,7 @@ Stairs.view = (() => {
     const project = state.projects.find((p) => p.id === state.activeProjectId);
     if (!project) {
       return h("main", { class: "main" },
-        h("p", { class: "empty", text: "還沒有專案。在左邊輸入名稱，建立你的第一個專案吧！" }));
+        h("p", { class: "empty", text: "還沒有專案。點左下角的 ≡ 打開專案列表，建立你的第一個專案吧！" }));
     }
     const total = project.steps.length;
     return h("main", { class: "main" },
@@ -294,8 +321,8 @@ Stairs.view = (() => {
         h("button", { type: "submit", class: "btn btn-primary", "data-focus-key": "add-step-submit" }, icon("plus"), "新增")));
   };
 
-  // P7T7: open / done switch fixed at the bottom center (SPEC v1.6 F10, A15). The thumb is its
-  // own element with a view-transition-name, so the re-render slides it to the other side.
+  // P7T7: open / done switch (SPEC F10); P7T10: at the bottom of the drawer (A19). The thumb is
+  // its own element with a view-transition-name, so the re-render slides it to the other side.
   const buildTabbar = (ui) => {
     const tab = (value, label) => {
       const selected = ui.tab === value;
@@ -443,7 +470,7 @@ Stairs.view = (() => {
 
   // P3T9: celebrate dialog; confetti is pure CSS, each piece tuned by custom properties
   const CONFETTI_COUNT = 24;
-  const openCelebrate = ({ projectName }) => {
+  const openCelebrate = ({ projectName, hasDeadline }) => {
     const closeBtn = h("button", { type: "button", class: "btn btn-primary", text: "關閉" });
     closeBtn.addEventListener("click", () => handlers.onCloseCelebrate());
     const confetti = h("div", { class: "confetti", "aria-hidden": "true" },
@@ -459,6 +486,8 @@ Stairs.view = (() => {
         confetti,
         h("h2", { id: "celebrate-title", class: "celebrate-title", text: "🎉 全部完成！" }),
         h("p", { id: "celebrate-project", class: "celebrate-project", text: projectName }),
+        // P7T11: a web page cannot delete calendar events itself (SPEC v1.8 F5, A20)
+        hasDeadline ? h("p", { class: "celebrate-note", text: "如果加過行事曆，記得到行事曆刪掉這個截止事件。" }) : null,
         h("div", { class: "dialog-actions" }, closeBtn),
       ],
       focusEl: closeBtn,
@@ -481,8 +510,12 @@ Stairs.view = (() => {
     root.replaceChildren(
       // P3T10: storage warning bar
       ui.storageWarning ? h("div", { class: "storage-warning", text: "無法儲存，重新整理後資料會消失" }) : "",
-      h("div", { class: "layout" }, buildSidebar(state, ui), buildMain(state, ui)),
-      buildTabbar(ui),
+      // P7T10: the page behind an open drawer is inert
+      h("div", { class: "layout", inert: ui.drawer }, buildMain(state, ui)),
+      buildDrawerButton(ui),
+      // replaceChildren would print null as text, so "" stands for "nothing"
+      ui.drawer ? h("div", { class: "drawer-backdrop", "data-action": "close-drawer", "aria-hidden": "true" }) : "",
+      buildDrawer(state, ui),
       h("span", { id: "lock-hint", class: "sr-only", text: LOCK_HINT }));
     rendering = false;
     restoreDrafts();
@@ -578,6 +611,8 @@ Stairs.view = (() => {
       case "edit-deadline": handlers.onEditDeadline(); break;
       case "set-tab": handlers.onSetTab(t.dataset.tab); break;
       case "add-to-calendar": handlers.onAddToCalendar(); break;
+      case "open-drawer": handlers.onOpenDrawer(); break;
+      case "close-drawer": handlers.onCloseDrawer(); break;
     }
   };
 
@@ -612,6 +647,13 @@ Stairs.view = (() => {
 
   const onKeyDown = (e) => {
     const t = e.target;
+
+    // P7T10: Esc closes the open drawer (SPEC v1.8 F12)
+    if (e.key === "Escape" && t.closest(".drawer.is-open") && !t.matches(".rename-input")) {
+      e.preventDefault();
+      handlers.onCloseDrawer();
+      return;
+    }
 
     // P7T3: Alt+↑ / Alt+↓ on any control inside a not-done step (SPEC v1.6 F2)
     if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown") && !t.matches(".rename-input")) {
