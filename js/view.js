@@ -32,12 +32,11 @@ Stairs.view = (() => {
   // P5T2: line icons (SPEC v1.3 §5.3). Parsed as HTML so the SVG namespace comes for free;
   // strokes take currentColor, so every icon follows the text color in both themes.
   const ICONS = {
-    grip: '<circle class="dot" cx="9" cy="6" r="1.4"/><circle class="dot" cx="15" cy="6" r="1.4"/><circle class="dot" cx="9" cy="12" r="1.4"/><circle class="dot" cx="15" cy="12" r="1.4"/><circle class="dot" cx="9" cy="18" r="1.4"/><circle class="dot" cx="15" cy="18" r="1.4"/>',
     pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
     trash: '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
-    up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
-    down: '<path d="M12 5v14M19 12l-7 7-7-7"/>',
+    bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     stairs: '<path d="M3 20h5v-5h5v-5h5V5h3"/>',
@@ -104,23 +103,59 @@ Stairs.view = (() => {
     return h("span", { class: cls, "data-dbl-rename": kind, "data-id": id, text: name });
   };
 
+  // P7T6: date text shown to the user, "YYYY/MM/DD"
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const deadlineDay = (deadline) => deadline.slice(0, 10).replace(/-/g, "/");
+  const localDay = (ms) => {
+    const d = new Date(ms);
+    return `${d.getFullYear()}/${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`;
+  };
+
+  // P7T8: list entries slide / fade like steps do
+  const vtName = (prefix, id) => `view-transition-name: ${CSS.escape(`${prefix}-${id}`)}; view-transition-class: proj`;
+
+  // P7T6: open tab = deadline order with a separator per day (SPEC v1.6 F9);
+  // P7T7: done tab = newest first, gray, with the completion date (SPEC v1.6 F10)
+  const buildProjectItems = (state, ui) => {
+    const done = ui.tab === "done";
+    const items = Q.listProjects(state, ui.tab);
+    if (items.length === 0) {
+      return h("p", { class: "empty side-empty", text: done ? "還沒有完成的專案。" : "沒有未完成的專案。" });
+    }
+    const showSeparators = !done && items.some((p) => p.deadline !== null);
+    const out = [];
+    let lastGroup = null;
+    for (const p of items) {
+      if (showSeparators) {
+        const group = p.deadline === null ? "none" : p.deadline.slice(0, 10);
+        if (group !== lastGroup) {
+          const label = p.deadline === null ? "無截止日期" : deadlineDay(p.deadline);
+          out.push(h("li", { class: "project-sep", role: "separator", "aria-label": label, style: vtName("sep", group) },
+            h("span", { "aria-hidden": "true", text: label })));
+          lastGroup = group;
+        }
+      }
+      out.push(h("li", { style: vtName("proj", p.id) },
+        h("button", {
+          type: "button",
+          class: `project-item${done ? " project-item-done" : ""}`,
+          "aria-current": p.id === state.activeProjectId ? "true" : null,
+          "data-action": "select-project",
+          "data-id": p.id,
+          "data-focus-key": `project:${p.id}`,
+        },
+          h("span", { class: "project-item-name", text: p.name }),
+          done ? h("span", { class: "project-item-meta", text: `完成於 ${localDay(p.completedAt)}` }) : null)));
+    }
+    return h("ul", { class: "project-list" }, out);
+  };
+
   // P3T2: project list and add-project form
-  const buildSidebar = (state) =>
+  const buildSidebar = (state, ui) =>
     h("aside", { class: "sidebar" },
       h("h1", { class: "brand" }, icon("stairs", "brand-icon"), "Stairs"),
-      h("nav", { "aria-label": "專案清單" },
-        h("ul", { class: "project-list" },
-          state.projects.map((p) =>
-            h("li", null,
-              h("button", {
-                type: "button",
-                class: "project-item",
-                text: p.name,
-                "aria-current": p.id === state.activeProjectId ? "true" : null,
-                "data-action": "select-project",
-                "data-id": p.id,
-                "data-focus-key": `project:${p.id}`,
-              }))))),
+      h("nav", { id: "project-nav", "aria-label": ui.tab === "done" ? "已完成專案" : "未完成專案" },
+        buildProjectItems(state, ui)),
       h("form", { class: "add-form add-project", "data-form": "add-project" },
         h("input", {
           type: "text",
@@ -151,11 +186,12 @@ Stairs.view = (() => {
   // P6T2: each step's status at the last render, so only a step that just changed animates
   let lastStatus = new Map();
 
-  // P3T3: step rows with the three looks of SPEC F3; P3T7 adds ↑↓ for not-done steps
+  // P7T3: not-done steps reorder with Alt+↑ / Alt+↓ (SPEC v1.6 F2, §6)
+  const MOVE_KEYS = "Alt+ArrowUp Alt+ArrowDown";
+
+  // P3T3: step rows with the three looks of SPEC F3; P7T3: no handle or ↑↓, the whole row drags
   const buildSteps = (project, ui) => {
     const current = Q.getCurrentStepIndex(project);
-    const firstOpen = Q.countDone(project);
-    const last = project.steps.length - 1;
     const prevStatus = lastStatus;
     lastStatus = new Map();
     return h("ol", { class: "step-list", "data-step-list": "" },
@@ -166,6 +202,7 @@ Stairs.view = (() => {
         lastStatus.set(step.id, status);
         const just = status === "done" && was === "current" ? " step-just-done"
           : status === "current" && was === "locked" ? " step-just-unlocked" : "";
+        const keys = step.done ? null : MOVE_KEYS;
         return h("li", {
           class: `step step-${status}${just}`,
           // P5T3: stair level; CSS turns it into the capped indent
@@ -177,9 +214,6 @@ Stairs.view = (() => {
           "data-step-id": step.id,
           "data-done": String(step.done),
         },
-          step.done
-            ? h("span", { class: "handle handle-off", "aria-hidden": "true" })
-            : h("span", { class: "handle", "aria-hidden": "true", "data-drag-handle": "" }, icon("grip")),
           // label widens the hit area to 40×40 without making the title clickable
           h("label", { class: "check-hit" },
             h("input", {
@@ -190,6 +224,7 @@ Stairs.view = (() => {
               title: locked ? LOCK_HINT : null,
               "aria-label": step.title,
               "aria-describedby": locked ? "lock-hint" : null,
+              "aria-keyshortcuts": keys,
               "data-action": "toggle",
               "data-id": step.id,
               "data-focus-key": `step-check:${step.id}`,
@@ -198,17 +233,15 @@ Stairs.view = (() => {
             icon("check", "check-mark")),
           locked ? h("span", { class: "lock", "aria-hidden": "true" }, icon("lock")) : null,
           buildName(ui, "step", step.id, step.title, "step-title"),
-          h("span", { class: "arrows" },
-            step.done
-              ? null
-              : [
-                  iconBtn("up", `上移：${step.title}`, "move-up", step.id, `step-up:${step.id}`, { disabled: i === firstOpen }),
-                  iconBtn("down", `下移：${step.title}`, "move-down", step.id, `step-down:${step.id}`, { disabled: i === last }),
-                ]),
-          iconBtn("pencil", `改名步驟：${step.title}`, "start-rename", step.id, `rename:step:${step.id}`, { "data-kind": "step" }),
-          iconBtn("trash", `刪除步驟：${step.title}`, "delete-step", step.id, `delete-step:${step.id}`));
+          iconBtn("pencil", `改名步驟：${step.title}`, "start-rename", step.id, `rename:step:${step.id}`,
+            { "data-kind": "step", "aria-keyshortcuts": keys }),
+          iconBtn("trash", `刪除步驟：${step.title}`, "delete-step", step.id, `delete-step:${step.id}`,
+            { "aria-keyshortcuts": keys }));
       }));
   };
+
+  // P7T9: SPEC v1.7 F11 — the calendar never follows later changes, so say so on the button
+  const CALENDAR_HINT = "下載行事曆檔，截止前 24 小時提醒。之後改截止日期要重新加入。";
 
   // P3T1: right side, including the two empty states of SPEC §5.2
   const buildMain = (state, ui) => {
@@ -223,6 +256,27 @@ Stairs.view = (() => {
         h("h2", { class: "project-name" }, buildName(ui, "project", project.id, project.name, "name-text")),
         iconBtn("pencil", `改名專案：${project.name}`, "start-rename", project.id, `rename:project:${project.id}`, { "data-kind": "project" }),
         iconBtn("trash", `刪除專案：${project.name}`, "delete-project", project.id, "delete-project")),
+      // P7T5: F8 deadline button under the name; P7T9: F11 calendar button beside it
+      h("div", { class: "deadline-row" },
+        h("button", {
+          type: "button",
+          class: `btn deadline-btn${project.deadline ? " has-deadline" : ""}`,
+          "aria-label": project.deadline ? `截止日期：${deadlineDay(project.deadline)} ${project.deadline.slice(11, 16)}，點一下修改` : null,
+          "data-action": "edit-deadline",
+          "data-focus-key": "deadline-btn",
+        },
+          icon("calendar"),
+          project.deadline ? `截止 ${deadlineDay(project.deadline)} ${project.deadline.slice(11, 16)}` : "設定截止日期"),
+        project.deadline
+          ? h("button", {
+              type: "button",
+              class: "btn deadline-btn",
+              title: CALENDAR_HINT,
+              "aria-description": CALENDAR_HINT,
+              "data-action": "add-to-calendar",
+              "data-focus-key": "calendar-btn",
+            }, icon("bell"), "加入行事曆")
+          : null),
       buildProgress(Q.countDone(project), total),
       total === 0
         ? h("p", { class: "empty", text: "這個專案還沒有步驟。在下面新增第一階。" })
@@ -238,6 +292,32 @@ Stairs.view = (() => {
           "data-focus-key": "add-step-input",
         }),
         h("button", { type: "submit", class: "btn btn-primary", "data-focus-key": "add-step-submit" }, icon("plus"), "新增")));
+  };
+
+  // P7T7: open / done switch fixed at the bottom center (SPEC v1.6 F10, A15). The thumb is its
+  // own element with a view-transition-name, so the re-render slides it to the other side.
+  const buildTabbar = (ui) => {
+    const tab = (value, label) => {
+      const selected = ui.tab === value;
+      return h("button", {
+        type: "button",
+        class: "tab",
+        role: "tab",
+        id: `tab-${value}`,
+        tabindex: selected ? "0" : "-1",
+        "aria-selected": selected ? "true" : "false",
+        "aria-controls": "project-nav",
+        "data-action": "set-tab",
+        "data-tab": value,
+        "data-focus-key": `tab:${value}`,
+        text: label,
+      });
+    };
+    return h("div", { class: "tabbar" },
+      h("div", { class: "tabs", role: "tablist", "aria-label": "專案分頁" },
+        h("span", { class: `tabs-thumb${ui.tab === "done" ? " is-right" : ""}`, "aria-hidden": "true" }),
+        tab("open", "未完成"),
+        tab("done", "已完成")));
   };
 
   // P3T4: shared dialog for confirm and celebrate (role, focus in, Esc / outside click, focus back)
@@ -306,6 +386,61 @@ Stairs.view = (() => {
     });
   };
 
+  // P7T4: date-time picker in the shared dialog (SPEC v1.6 F8, ARCHITECTURE §2.3).
+  // onResult(string) on 完成, onResult(null) on 跳過 / 清除, nothing on 取消 / Esc / outside.
+  const pickDeadline = ({ mode, value }, onResult) => {
+    flush();
+    if (dialog) return;
+    const picker = Stairs.picker.create(value);
+    const close = () => closeDialog(true);
+    const button = (text, cls, fn) => {
+      const b = h("button", { type: "button", class: `btn ${cls}`, text });
+      b.addEventListener("click", fn);
+      return b;
+    };
+    const finish = (result) => {
+      close();
+      onResult(result);
+    };
+    const side = mode === "create" ? button("跳過", "", () => finish(null))
+      : value !== null ? button("清除", "", () => finish(null)) : null;
+    openDialog({
+      kind: "picker",
+      labelledBy: "picker-title",
+      content: [
+        h("h2", { id: "picker-title", class: "dialog-title", text: mode === "create" ? "設定截止日期" : "截止日期" }),
+        picker.el,
+        h("div", { class: "dialog-actions picker-actions" },
+          side ? h("span", { class: "actions-side" }, side) : null,
+          button("取消", "", close),
+          button("完成", "btn-primary", () => finish(picker.getValue()))),
+      ],
+      focusEl: picker.focusTarget(),
+      onDismiss: close,
+      // SPEC v1.6 §6: back to where the picker was opened from
+      returnKey: mode === "create" ? "add-project-input" : getFocusKey(),
+    });
+    picker.mount();
+  };
+
+  // P7T9: let the browser save a generated file (SPEC v1.7 F11, A16)
+  const download = (filename, text, type) => {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = h("a", { href: url, download: filename, hidden: true });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    // revoke later: some browsers read the blob after click() returns
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+
+  // P7T5: app empties the add-project input only after a project was really created (A14)
+  const clearDraft = (name) => {
+    drafts[name] = "";
+    const el = root.querySelector(`[data-draft="${name}"]`);
+    if (el) el.value = "";
+  };
+
   // P3T9: celebrate dialog; confetti is pure CSS, each piece tuned by custom properties
   const CONFETTI_COUNT = 24;
   const openCelebrate = ({ projectName }) => {
@@ -346,7 +481,8 @@ Stairs.view = (() => {
     root.replaceChildren(
       // P3T10: storage warning bar
       ui.storageWarning ? h("div", { class: "storage-warning", text: "無法儲存，重新整理後資料會消失" }) : "",
-      h("div", { class: "layout" }, buildSidebar(state), buildMain(state, ui)),
+      h("div", { class: "layout" }, buildSidebar(state, ui), buildMain(state, ui)),
+      buildTabbar(ui),
       h("span", { id: "lock-hint", class: "sr-only", text: LOCK_HINT }));
     rendering = false;
     restoreDrafts();
@@ -439,8 +575,9 @@ Stairs.view = (() => {
       case "start-rename": handlers.onStartRename(t.dataset.kind, id); break;
       case "delete-project": handlers.onDeleteProject(id); break;
       case "delete-step": handlers.onDeleteStep(id); break;
-      case "move-up": handlers.onMoveBy(id, -1); break;
-      case "move-down": handlers.onMoveBy(id, 1); break;
+      case "edit-deadline": handlers.onEditDeadline(); break;
+      case "set-tab": handlers.onSetTab(t.dataset.tab); break;
+      case "add-to-calendar": handlers.onAddToCalendar(); break;
     }
   };
 
@@ -466,7 +603,8 @@ Stairs.view = (() => {
     const form = e.target;
     const input = form.querySelector("input");
     const value = input.value;
-    input.value = "";
+    // P7T5: the project name stays until app confirms the create (cancel keeps it, A14)
+    if (form.dataset.form === "add-step") input.value = "";
     flushRename();
     if (form.dataset.form === "add-project") handlers.onCreateProject(value);
     else if (form.dataset.form === "add-step") handlers.onAddStep(value);
@@ -474,6 +612,24 @@ Stairs.view = (() => {
 
   const onKeyDown = (e) => {
     const t = e.target;
+
+    // P7T3: Alt+↑ / Alt+↓ on any control inside a not-done step (SPEC v1.6 F2)
+    if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown") && !t.matches(".rename-input")) {
+      const row = t.closest("[data-step-row]");
+      if (!row || row.dataset.done === "true") return;
+      e.preventDefault();
+      flushRename();
+      handlers.onMoveBy(row.dataset.stepId, e.key === "ArrowUp" ? -1 : 1);
+      return;
+    }
+
+    // P7T7: ← → switch tabs (SPEC v1.6 §6)
+    if (t.matches("[role=tab]") && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      e.preventDefault();
+      handlers.onSetTab(e.key === "ArrowLeft" ? "open" : "done");
+      return;
+    }
+
     if (!t.matches(".rename-input")) return;
     if (e.key === "Enter") {
       e.preventDefault();
@@ -503,5 +659,5 @@ Stairs.view = (() => {
   };
 
   // P6T1: focus is read from the DOM, so it must be current
-  return { init, render, confirm, getFocusKey: () => { flush(); return getFocusKey(); } };
+  return { init, render, confirm, pickDeadline, clearDraft, download, getFocusKey: () => { flush(); return getFocusKey(); } };
 })();

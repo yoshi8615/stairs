@@ -1,6 +1,6 @@
 # Stairs 實作計畫（PLAN）
 
-> 對應規格：`SPEC.md` v1.5　｜　對應架構：`ARCHITECTURE.md`　｜　日期：2026-10-04（P5、P6 加於 2026-10-05）
+> 對應規格：`SPEC.md` v1.7　｜　對應架構：`ARCHITECTURE.md`　｜　日期：2026-10-04（P5、P6 加於 2026-10-05；P7 加於 2026-10-06）
 
 ---
 
@@ -38,6 +38,14 @@ ARCHITECTURE §6 的決定紀錄。每一項影響哪些步驟：
 | A2 `normalize` 怎樣算格式不對 | 最外層壞 → 空資料；單筆壞 → 只丟那一筆（SPEC v1.2 §3.3） | P1T6 |
 | A3 JS 語法版本 | 現代語法，不用 ES module | P1T1（之後所有檔案都照它） |
 | A4 拖到已完成區的視覺表現 | 線停在未完成區最上面，`toIndex` 先修正 | P3T8 |
+| A9 日期時間選單 | 自己做（`picker.js`） | P7T4 |
+| A10 `deadline` 格式 | 當地時間字串 `YYYY-MM-DDTHH:MM` | P7T1 |
+| A11 拖曳怎麼開始 | 滑鼠 5px 門檻；觸控長按 400ms | P7T3 |
+| A12 鍵盤排序 | Alt+↑ / Alt+↓ | P7T3 |
+| A13 已完成判斷 | 自動用 `isProjectComplete`；舊資料補讀取當下時間 | P7T1 |
+| A14 建立時按取消 | 不建立，名稱保留 | P7T5 |
+| A15 切換欄位位置 | 固定在畫面最下面正中間 | P7T7 |
+| A16 行事曆檔 | `state.js` 產生文字、`view.js` 用 Blob 下載 | P7T9 |
 
 ---
 
@@ -230,6 +238,76 @@ ARCHITECTURE §6 的決定紀錄。每一項影響哪些步驟：
 - **依賴：** P6T2
 - **檢查：** §3 C1–C8 再跑一次，全部通過。
 
+### P7　截止日期、已完成分頁、拖曳改版、加入行事曆（SPEC v1.6、v1.7）
+
+ARCHITECTURE §6 A9–A16 是這一階段的決定。P7T2、P7T3 和截止日期無關，可以先做。
+
+#### P7T1　資料欄位與查詢
+- **檔案：** `js/state.js`、`js/tests.js`
+- **內容：** `isValidDeadline`、`syncCompletedAt`（ARCHITECTURE §2.1）；`addStep`、`deleteStep`、`checkStep`、`uncheckStep` 經過 `syncCompletedAt`；`createProject` 加 `deadline` 參數、新專案帶 `deadline` 和 `completedAt: null`；新增 `setDeadline`、`listProjects`；`normalize` 補兩個欄位的規則（SPEC §3.3）。測試的「不變式檢查」加上第二條。
+- **依賴：** P6T3
+- **檢查：** C1 全部通過（原本 41 項不能壞），新增的測試至少包含：
+  - 打勾最後一階 → `completedAt` 是數字；再取消 → `null`；全部完成後加新步驟 → `null`。
+  - 刪掉最後一個未完成步驟 → `completedAt` 是數字；刪到剩 0 步 → `null`。
+  - 已完成專案改名、改截止日期 → `completedAt` 不變。
+  - `setDeadline`：`"2026-02-30T10:00"`、`"2026-10-05"`、`"abc"`、數字 → 回傳同一個 state；`null` → 清除。
+  - `createProject` 帶不合法的 `deadline` → 回傳同一個 state。
+  - `listProjects(state, "open")`：早的在前、沒日期的在最後、同時間照建立順序；`"done"`：完成時間新的在前；0 步驟的專案在 `"open"`。
+  - `normalize`：沒有這兩個欄位的舊資料 → 專案都還在；壞掉的 `deadline` → `null`；全部完成但沒 `completedAt` → 補成數字；沒完成但有 `completedAt` → `null`。
+
+#### P7T2　階梯縮排
+- **檔案：** `css/style.css`
+- **內容：** `--stair-max` 改成 `2`；手機的 `--stair` 改成 `9px`（ARCHITECTURE §2.3）。
+- **依賴：** P6T3
+- **檢查：** 12 個步驟時，第 3 階起全部對齊；375px 寬沒有橫向捲軸、標題看得到；DevTools 量手機第 2 階的縮排是 9px。
+
+#### P7T3　拖曳改版、Alt+↑↓
+- **檔案：** `js/drag.js`、`js/view.js`、`js/app.js`、`css/style.css`
+- **內容：** 拿掉 ⋮⋮ 把手和 ↑↓ 按鈕（連同它們的 CSS、`move-up`／`move-down` 動作、`step-up:`／`step-down:` 焦點 key）；`drag.js` 照 ARCHITECTURE §6 A11 改成從整列開始、滑鼠 5px 門檻、觸控長按 400ms；`view.js` 加 Alt+↑/↓ 的 `keydown` 和 `aria-keyshortcuts`；`app.js` 的 `onMoveBy` 焦點改成留在原本的控制項（A12）。手機版面的 ✏️ 🗑️ 位置重新看一次（ARCHITECTURE A7）。
+- **依賴：** P7T2
+- **檢查：** SPEC §8「F2 步驟」全部通過；DevTools 手機模擬：直接滑過步驟頁面會捲、長按後才拖；拖曳中頁面不捲；鍵盤 Alt+↓ 連按兩次，同一個步驟往下兩格，焦點不變。**真 iPhone** 上長按拖曳和捲動由使用者驗收（A11 的風險）。
+
+#### P7T4　日期時間選單本體
+- **檔案：** `js/picker.js`（新增）、`js/view.js`、`index.html`、`css/style.css`
+- **內容：** `Stairs.picker.create(value)`（月曆、‹ ›、週日開頭、選中橘色實心圓、今天橘字、小時滾輪 `scroll-snap`、方向鍵、`role="spinbutton"`）；`view.pickDeadline` 用共用 dialog 包起來（兩種 `mode` 的按鈕、回呼規則）；`index.html` 照 ARCHITECTURE §1.1 的順序加 `picker.js`。
+- **依賴：** P7T1
+- **檢查：** 在 Console 執行 `Stairs.view.pickDeadline({ mode: "edit", value: "2026-10-05T16:00" }, console.log)`：月曆停在 2026 年 10 月、5 號是橘色圓、1 號在週四底下、滾輪停在 16:00；按完成印出字串，按清除印出 `null`，取消／Esc／點外面什麼都不印；只用鍵盤可以操作完；375px 寬放得下；深色模式正常。C2 沒有輸出。
+
+#### P7T5　截止日期接線
+- **檔案：** `js/view.js`、`js/app.js`
+- **內容：** 專案名稱下方的截止日期按鈕和 `onEditDeadline`；`onCreateProject` 改成先開選單（ARCHITECTURE §2.4）；`view.clearDraft`，新增專案框送出時不再自己清空（A14）。
+- **依賴：** P7T4
+- **檢查：** SPEC §8「F8 截止日期」全部通過；焦點：建立流程結束回到新增專案框，修改流程結束回到截止日期按鈕。
+
+#### P7T6　側欄排序與分組
+- **檔案：** `js/view.js`、`css/style.css`
+- **內容：** 側欄改用 `listProjects`；日期分隔線（`role="separator"`、灰色小字、兩邊橫線）；全部都沒截止日期時不顯示分隔線。
+- **依賴：** P7T5
+- **檢查：** SPEC §8「F9 排序與分組」全部通過。
+
+#### P7T7　未完成／已完成切換欄位
+- **檔案：** `js/view.js`、`js/app.js`、`css/style.css`、`index.html`
+- **內容：** `ui.tab`、`onSetTab`；固定在畫面最下面正中間的切換欄位（`role="tablist"`、← → 切換）；已完成清單灰色名稱＋「完成於」小字；兩種空分頁文字；打開的專案只在看得到時醒目標示；`body` 下方留空間、`env(safe-area-inset-bottom)`、`viewport-fit=cover`（A15）。
+- **依賴：** P7T6
+- **檢查：** SPEC §8「F10 未完成／已完成」全部通過；捲到最底切換欄位沒蓋住任何東西；彈窗打開時點不到切換欄位。
+
+#### P7T8　側欄和切換欄位的動畫
+- **檔案：** `js/view.js`、`css/style.css`
+- **內容：** 側欄每個專案一個 `view-transition-name`，分頁之間移動、重新排序時滑動／淡入淡出；切換欄位的色塊滑過去（ARCHITECTURE §2.3）。減少動態效果時全部關掉。
+- **依賴：** P7T7
+- **檢查：** 改截止日期後專案滑到新位置；切換分頁時色塊滑過去；DevTools 開「prefers-reduced-motion: reduce」後沒有動畫。
+
+#### P7T9　加入行事曆（SPEC v1.7 F11）
+- **檔案：** `js/state.js`、`js/tests.js`、`js/view.js`、`js/app.js`、`css/style.css`
+- **內容：** `state.js` 加 `toIcs(project)`（ARCHITECTURE §2.1、A16）：RFC 5545 格式、CRLF 換行、文字跳脫、每行最多 75 bytes 折行、不帶時區的 `DTSTART`、`TRIGGER:-PT24H`、事件 id `<專案 id>@stairs`。截止日期按鈕旁邊的「加入行事曆」按鈕和 `handlers.onAddToCalendar`；app 算檔名、呼叫 `view.download`。
+- **依賴：** P7T8
+- **檢查：** C1 全部通過，新增的測試至少包含：沒有截止日期 → `null`；`DTSTART`、`TRIGGER`、`UID` 正確；名稱裡的 `,` `;` `\` 被跳脫；100 字的中文名稱折行後每行 ≤ 75 bytes，解開折行後標題和原本一樣；每行用 CRLF 結尾。無介面 Chrome：有截止日期才有按鈕；按下去下載的檔名和內容正確；資料沒變。SPEC §8「F11」的行事曆和 iPhone 項目由使用者手動驗收。
+
+#### P7T10　P7 驗收
+- **檔案：** 不改檔案（發現問題就回到對應步驟修）。
+- **依賴：** P7T9
+- **檢查：** §3 C1–C8 再跑一次，全部通過；另外在真 iPhone 上確認長按拖曳、滾輪、切換欄位沒被底部橫條擋住，以及 SPEC §8「F11」：Safari 和主畫面 App 都能把行事曆檔加進行事曆。
+
 ---
 
 ## 3. 驗收標準
@@ -257,7 +335,7 @@ ARCHITECTURE §6 的決定紀錄。每一項影響哪些步驟：
 **C4　畫面層不直接改資料、不碰儲存**
 - 做法：
   ```
-  grep -nE 'localStorage|Stairs\.storage|Stairs\.state\.(create|rename|delete|add|move|check|uncheck|setActive)' js/view.js js/drag.js
+  grep -nE 'localStorage|Stairs\.storage|Stairs\.state\.(create|rename|delete|add|move|check|uncheck|set)' js/view.js js/drag.js js/picker.js
   ```
 - 通過：沒有任何輸出。
 
@@ -287,3 +365,5 @@ ARCHITECTURE §6 的決定紀錄。每一項影響哪些步驟：
 | 2026-10-05 | P5T1–P5T4 完成。自動檢查通過：C1（`test.html` 41 / 41）、C2–C4；無介面 Chrome 檢查淺色／深色、桌機／375px 截圖、沒有橫向捲軸、按鈕都至少 40×40、畫面沒有 emoji、階梯縮排到第 9 階停止、打勾解鎖、拖曳放下線位置正確。按鈕文字對比度：淺色 4.75、深色 5.88。**P5T5 尚未完成**：C5（Firefox）、C8（Safari、Edge、Firefox）、真手機需使用者手動驗收。 |
 | 2026-10-05 | P6T1–P6T2 完成。自動檢查通過：C1（41 / 41）、C2–C4；無介面 Chrome 用真的鍵盤／滑鼠事件檢查 21 項：轉場確實播放（步驟、進度條、新增框各自有動畫）、快速連按 ↓ 和連按 Enter 新增的結果與焦點都正確、只有剛改變的那一階有打勾／解鎖動畫、取消打勾的確認視窗和 Esc 後焦點、刪除和改名後焦點、拖曳、慶祝彈窗、減少動態效果時不跑轉場、Console 沒有錯誤。**P6T3 尚未完成**：Firefox、Safari、真手機上的動畫需使用者手動看。 |
 | 2026-10-05 | P5T6 完成：`img/icon-180.png`（180×180、不透明）和 `index.html` 的圖示連結；C2 通過。iPhone 主畫面圖示需使用者 push 後重新「加入主畫面」確認。 |
+| 2026-10-06 | P7T1–P7T8 完成。自動檢查通過：C1（`test.html` 52 / 52，含 11 項新測試）、C2–C4；無介面 Chrome 用真的滑鼠、鍵盤、觸控事件檢查 62 項：v1.5 舊資料升級不丟專案、階梯縮排到第 3 階停止（桌機 20px、手機 9px）、沒有把手和 ↑↓、按住整列拖曳、雙擊改名和點勾選框不會變成拖曳、已完成步驟不能拖、Alt+↑↓ 排序和焦點、手機快速滑過不拖／長按 0.4 秒才拖、日期時間選單（2026/10/1 在週四、換月、方向鍵、滾輪、完成／清除／跳過／取消／Esc、預設下一個整點、焦點回去）、建立專案的三種結果、側欄日期分組、分頁切換和完成日期、已完成專案取消打勾回到未完成、切換欄位置中且不蓋住新增框、375px 沒有橫向捲軸、按鈕至少 40×40、側欄和切換欄位的轉場動畫、Console 沒有錯誤。實作時補的規則：目前這一階被 Alt+↓ 移下去而變成鎖住時，焦點改到它的 ✏️（SPEC v1.6 F2）。**P7T10 驗收尚未完成**（原本的 P7T9 驗收，2026-10-06 經使用者同意和新加的「加入行事曆」互換編號）：真 iPhone 上的長按拖曳、滾輪手感、切換欄位和底部橫條，以及 C5、C8 需使用者手動驗收。 |
+| 2026-10-06 | P7T9 完成（SPEC v1.7 F11 加入行事曆）。自動檢查通過：C1（`test.html` 56 / 56，含 4 項 `toIcs` 新測試：沒截止日期回傳 `null`、DTSTART／TRIGGER／UID／CRLF、跳脫、中文長名稱折行 ≤ 75 bytes）、C2–C4；無介面 Chrome：有截止日期才有按鈕、下載檔名與內容與 MIME 正確、資料不變、提示文字、375px 沒有橫向捲軸；P7 原本 62 項再跑一次全部通過。**P7T10 尚未完成**：真 iPhone（Safari 和主畫面 App）把行事曆檔加進行事曆並收到 24 小時前通知，以及前一筆列的手動項目。 |

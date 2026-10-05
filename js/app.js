@@ -6,7 +6,8 @@ Stairs.app = (() => {
 
   // P3T1: the single state, plus in-memory ui state (never saved)
   let state = null;
-  const ui = { editing: null, celebrate: null, storageWarning: false, focusKey: null };
+  // P7T7: tab is "open" / "done" and always starts on "open" (SPEC v1.6 F10)
+  const ui = { editing: null, celebrate: null, storageWarning: false, focusKey: null, tab: "open" };
   let celebrateReturnKey = null;
 
   const activeProject = () => state.projects.find((p) => p.id === state.activeProjectId) || null;
@@ -37,10 +38,17 @@ Stairs.app = (() => {
   };
 
   const handlers = {
-    // P3T2: F1
+    // P3T2: F1; P7T5: the deadline picker comes first, cancel creates nothing (SPEC v1.6 F8, A14)
     onCreateProject: (name) => {
       ui.editing = null;
-      dispatch(S.createProject, name);
+      render();
+      if (name.trim() === "") return;
+      Stairs.view.pickDeadline({ mode: "create", value: null }, (deadline) => {
+        ui.tab = "open";
+        ui.focusKey = "add-project-input";
+        Stairs.view.clearDraft("add-project");
+        dispatch(S.createProject, name, deadline);
+      });
     },
     onSelectProject: (projectId) => {
       ui.editing = null;
@@ -58,19 +66,45 @@ Stairs.app = (() => {
       dispatch(S.moveStep, state.activeProjectId, stepId, toIndex);
     },
 
-    // P3T7: ↑↓; focus follows the same arrow, or the other one if this one just became disabled
+    // P3T7: keyboard reorder; P7T3: now Alt+↑ / Alt+↓, focus stays on the same control (A12)
     onMoveBy: (stepId, delta) => {
       const p = activeProject();
       const from = p ? p.steps.findIndex((s) => s.id === stepId) : -1;
       if (from === -1) return render();
-      const to = from + delta;
-      const next = S.moveStep(state, p.id, stepId, to);
-      if (next !== state) {
-        const atEdge = delta < 0 ? to === S.countDone(p) : to === p.steps.length - 1;
-        const up = delta < 0 ? !atEdge : atEdge;
-        ui.focusKey = `${up ? "step-up" : "step-down"}:${stepId}`;
+      const next = S.moveStep(state, p.id, stepId, from + delta);
+      let key = Stairs.view.getFocusKey();
+      // the current step moved down becomes locked and its checkbox disabled: use its ✏️ instead
+      const moved = next.projects.find((x) => x.id === p.id);
+      if (key === `step-check:${stepId}` && moved.steps[S.getCurrentStepIndex(moved)]?.id !== stepId) {
+        key = `rename:step:${stepId}`;
       }
+      ui.focusKey = key;
       commit(next);
+      render();
+    },
+
+    // P7T5: F8 change or clear the open project's deadline
+    onEditDeadline: () => {
+      const p = activeProject();
+      if (!p) return render();
+      Stairs.view.pickDeadline({ mode: "edit", value: p.deadline },
+        (deadline) => dispatch(S.setDeadline, p.id, deadline));
+    },
+
+    // P7T9: F11 download a calendar file; no state change, nothing saved
+    onAddToCalendar: () => {
+      const text = S.toIcs(activeProject());
+      if (text === null) return;
+      // characters no file system accepts become "_"
+      const base = activeProject().name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim() || "Stairs";
+      Stairs.view.download(`${base}.ics`, text, "text/calendar;charset=utf-8");
+    },
+
+    // P7T7: F10 tab switch; keyboard focus follows the selected tab
+    onSetTab: (tab) => {
+      if (tab !== "open" && tab !== "done") return;
+      if (String(Stairs.view.getFocusKey()).startsWith("tab:")) ui.focusKey = `tab:${tab}`;
+      ui.tab = tab;
       render();
     },
 

@@ -57,11 +57,15 @@ Stairs.tests = (() => {
   const { test, assert, assertEqual } = Stairs.tests;
 
   // P1T2: fixtures; pattern "✓✓□" -> steps with fixed ids `${id}_s1`, `${id}_s2`, ...
-  const proj = (id, pattern) => ({
+  // P7T1: v1.6 fields; a fully checked pattern starts with completedAt 1 so invariant 2 holds
+  const proj = (id, pattern, extra = {}) => ({
     id,
     name: id,
     createdAt: 0,
+    deadline: null,
+    completedAt: pattern.length > 0 && !pattern.includes("□") ? 1 : null,
     steps: Array.from(pattern).map((c, i) => ({ id: `${id}_s${i + 1}`, title: `步驟${i + 1}`, done: c === "✓" })),
+    ...extra,
   });
   const stateOf = (...projects) => ({
     version: 1,
@@ -80,6 +84,11 @@ Stairs.tests = (() => {
       if (first !== -1) {
         assert(p.steps.slice(first).every((s) => !s.done), `專案 ${p.id} 違反不變式：${pattern(p)}`);
       }
+      // P7T1: invariant 2 (SPEC v1.6 §3.2)
+      const complete = p.steps.length > 0 && first === -1;
+      assert(complete ? typeof p.completedAt === "number" : p.completedAt === null,
+        `專案 ${p.id} 違反不變式第二條：完成=${complete}、completedAt=${p.completedAt}`);
+      assert(p.deadline === null || typeof p.deadline === "string", `專案 ${p.id} 的 deadline 型別不對`);
     }
     if (state.projects.length) {
       assert(state.projects.some((p) => p.id === state.activeProjectId), "activeProjectId 必須指向存在的專案");
@@ -334,7 +343,8 @@ Stairs.tests = (() => {
     return next;
   };
   const rawStep = (id, done, title = id) => ({ id, title, done });
-  const rawProject = (id, steps, extra = {}) => ({ id, name: id, createdAt: 1, steps, ...extra });
+  const rawProject = (id, steps, extra = {}) =>
+    ({ id, name: id, createdAt: 1, deadline: null, completedAt: null, steps, ...extra });
 
   test("P1T6 normalize：最外層壞掉 → 空資料", () => {
     const bads = [
@@ -450,6 +460,166 @@ Stairs.tests = (() => {
     assert(s.projects[0].name === "n".repeat(100));
     assert(s.projects[0].steps.length === 1);
     assert(s.projects[0].steps[0].title === "t".repeat(200));
+  });
+
+  // P7T1: completedAt follows completion (SPEC v1.6 §3.2 invariant 2)
+  test("P7T1 completedAt：打勾最後一階 → 數字；取消 → null", () => {
+    const s0 = stateOf(proj("p", "✓□"));
+    const s1 = apply(s0, (s) => S.checkStep(s, "p", "p_s2"));
+    assert(typeof s1.projects[0].completedAt === "number", "全部完成後應有 completedAt");
+    const s2 = apply(s1, (s) => S.uncheckStep(s, "p", "p_s2"));
+    assert(s2.projects[0].completedAt === null, "取消後應為 null");
+  });
+
+  test("P7T1 completedAt：全部完成後加新步驟 → null", () => {
+    const s0 = stateOf(proj("p", "✓✓"));
+    const s1 = apply(s0, (s) => S.addStep(s, "p", "新的"));
+    assert(s1.projects[0].completedAt === null);
+  });
+
+  test("P7T1 completedAt：刪掉最後一個未完成步驟 → 數字；刪到剩 0 步 → null", () => {
+    const s0 = stateOf(proj("p", "✓□"));
+    const s1 = apply(s0, (s) => S.deleteStep(s, "p", "p_s2"));
+    assert(typeof s1.projects[0].completedAt === "number");
+    const s2 = apply(s1, (s) => S.deleteStep(s, "p", "p_s1"));
+    assert(s2.projects[0].completedAt === null);
+  });
+
+  test("P7T1 completedAt：已完成專案改名、改步驟名、改截止日期、刪已完成步驟 → 不變", () => {
+    const s0 = stateOf(proj("p", "✓✓", { completedAt: 123 }));
+    const s1 = apply(s0, (s) => S.renameProject(s, "p", "新名"));
+    const s2 = apply(s1, (s) => S.renameStep(s, "p", "p_s1", "新步驟名"));
+    const s3 = apply(s2, (s) => S.setDeadline(s, "p", "2026-10-05T16:00"));
+    const s4 = apply(s3, (s) => S.deleteStep(s, "p", "p_s1"));
+    assert(s4.projects[0].completedAt === 123, `completedAt 變成 ${s4.projects[0].completedAt}`);
+  });
+
+  // P7T1: deadline (SPEC v1.6 F8, §7)
+  test("P7T1 setDeadline：設定、清除；不合法 → 同一個 state", () => {
+    const s0 = stateOf(proj("p", "□"));
+    const s1 = apply(s0, (s) => S.setDeadline(s, "p", "2026-10-05T16:00"));
+    assert(s1.projects[0].deadline === "2026-10-05T16:00");
+    const s2 = apply(s1, (s) => S.setDeadline(s, "p", null));
+    assert(s2.projects[0].deadline === null);
+    for (const bad of ["2026-02-30T10:00", "2026-10-05", "abc", 1700000000000, "2026-10-05T24:00", "2026-13-01T00:00", undefined]) {
+      assert(apply(s1, (s) => S.setDeadline(s, "p", bad)) === s1, `${JSON.stringify(bad)} 應被拒絕`);
+    }
+    assert(apply(s1, (s) => S.setDeadline(s, "p", "2026-10-05T16:00")) === s1, "沒變也要回傳同一個 state");
+    assert(apply(s1, (s) => S.setDeadline(s, "nope", null)) === s1);
+  });
+
+  test("P7T1 setDeadline：閏年 2 月 29 日", () => {
+    const s0 = stateOf(proj("p", "□"));
+    assert(apply(s0, (s) => S.setDeadline(s, "p", "2028-02-29T09:00")) !== s0);
+    assert(apply(s0, (s) => S.setDeadline(s, "p", "2026-02-29T09:00")) === s0);
+  });
+
+  test("P7T1 createProject：帶截止日期；不合法的截止日期 → 同一個 state", () => {
+    const s0 = S.emptyState();
+    const s1 = apply(s0, (s) => S.createProject(s, "有日期", "2026-10-05T16:00"));
+    assert(s1.projects[0].deadline === "2026-10-05T16:00");
+    assert(s1.projects[0].completedAt === null);
+    const s2 = apply(s0, (s) => S.createProject(s, "沒日期"));
+    assert(s2.projects[0].deadline === null);
+    assert(apply(s0, (s) => S.createProject(s, "壞日期", "2026-02-30T10:00")) === s0);
+  });
+
+  // P7T1: tab contents and order (SPEC v1.6 F9, F10)
+  test("P7T1 listProjects open：早的在前、沒日期在最後、同時間照建立順序", () => {
+    const s = stateOf(
+      proj("none1", "□"),
+      proj("late", "□", { deadline: "2026-10-12T09:00" }),
+      proj("tieA", "□", { deadline: "2026-10-05T16:00" }),
+      proj("done", "✓"),
+      proj("empty", ""),
+      proj("early", "□", { deadline: "2026-10-05T08:00" }),
+      proj("tieB", "□", { deadline: "2026-10-05T16:00" }),
+      proj("none2", "✓□"));
+    const before = JSON.stringify(s);
+    assertEqual(S.listProjects(s, "open").map((p) => p.id), ["early", "tieA", "tieB", "late", "none1", "empty", "none2"]);
+    assert(JSON.stringify(s) === before, "listProjects 改到了 state");
+  });
+
+  test("P7T1 listProjects done：完成時間新的在前，同時間照建立順序", () => {
+    const s = stateOf(
+      proj("old", "✓", { completedAt: 100 }),
+      proj("open", "□"),
+      proj("newA", "✓✓", { completedAt: 300 }),
+      proj("mid", "✓", { completedAt: 200 }),
+      proj("newB", "✓", { completedAt: 300 }));
+    assertEqual(S.listProjects(s, "done").map((p) => p.id), ["newA", "newB", "mid", "old"]);
+  });
+
+  // P7T1: normalize for the v1.6 fields (SPEC v1.6 §3.3)
+  test("P7T1 normalize：沒有新欄位的舊資料 → 專案都在，補上 deadline / completedAt", () => {
+    const raw = {
+      version: 1,
+      activeProjectId: "a",
+      projects: [
+        { id: "a", name: "a", createdAt: 1, steps: [rawStep("s1", true)] },
+        { id: "b", name: "b", createdAt: 1, steps: [rawStep("t1", false)] },
+      ],
+    };
+    const s = normalizeOk(raw);
+    assertEqual(s.projects.map((p) => p.id), ["a", "b"]);
+    assert(typeof s.projects[0].completedAt === "number", "已完成的舊專案應補上完成時間");
+    assert(s.projects[1].completedAt === null);
+    assert(s.projects.every((p) => p.deadline === null));
+  });
+
+  test("P7T1 normalize：壞掉的 deadline → null；不一致的 completedAt 被修正；好的保留", () => {
+    const raw = {
+      version: 1,
+      activeProjectId: "a",
+      projects: [
+        rawProject("a", [rawStep("s1", false)], { deadline: "2026-02-30T10:00", completedAt: 555 }),
+        rawProject("b", [rawStep("t1", true)], { deadline: 12345, completedAt: "x" }),
+        rawProject("c", [rawStep("u1", true)], { deadline: "2026-10-05T16:00", completedAt: 777 }),
+      ],
+    };
+    const s = normalizeOk(raw);
+    assertEqual(s.projects.map((p) => p.id), ["a", "b", "c"]);
+    assert(s.projects[0].deadline === null && s.projects[0].completedAt === null);
+    assert(s.projects[1].deadline === null && typeof s.projects[1].completedAt === "number");
+    assert(s.projects[2].deadline === "2026-10-05T16:00" && s.projects[2].completedAt === 777);
+  });
+
+  // P7T9: F11 calendar file (SPEC v1.7, ARCHITECTURE A16)
+  const unfold = (ics) => ics.replace(/\r\n /g, "");
+  const icsLine = (ics, name) => unfold(ics).split("\r\n").find((l) => l.startsWith(name + ":"));
+
+  test("P7T9 toIcs：沒有截止日期 → null", () => {
+    assert(S.toIcs(proj("p", "□")) === null);
+  });
+
+  test("P7T9 toIcs：時間、提醒、事件 id、CRLF", () => {
+    const p = proj("p_abc", "□", { name: "寫論文", deadline: "2026-10-05T16:00" });
+    const before = JSON.stringify(p);
+    const ics = S.toIcs(p);
+    assert(JSON.stringify(p) === before, "toIcs 改到了專案");
+    assert(icsLine(ics, "DTSTART") === "DTSTART:20261005T160000", icsLine(ics, "DTSTART"));
+    assert(icsLine(ics, "TRIGGER") === "TRIGGER:-PT24H");
+    assert(icsLine(ics, "UID") === "UID:p_abc@stairs");
+    assert(icsLine(ics, "SUMMARY") === "SUMMARY:截止：寫論文");
+    assert(/^DTSTAMP:\d{8}T\d{6}Z$/.test(icsLine(ics, "DTSTAMP")), icsLine(ics, "DTSTAMP"));
+    assert(!/DTEND/.test(ics), "不應有 DTEND");
+    assert(ics.startsWith("BEGIN:VCALENDAR\r\n") && ics.endsWith("END:VCALENDAR\r\n"));
+    assert(!/[^\r]\n/.test(ics), "每一行都要用 CRLF 結尾");
+  });
+
+  test("P7T9 toIcs：逗號、分號、反斜線、換行被跳脫", () => {
+    const ics = S.toIcs(proj("p", "□", { name: "a,b;c\\d\ne", deadline: "2026-10-05T16:00" }));
+    assert(icsLine(ics, "SUMMARY") === "SUMMARY:截止：a\\,b\\;c\\\\d\\ne", icsLine(ics, "SUMMARY"));
+  });
+
+  test("P7T9 toIcs：100 字中文名稱折行後每行 ≤ 75 bytes，解開後不變", () => {
+    const name = "階".repeat(99) + "😀";
+    const ics = S.toIcs(proj("p", "□", { name, deadline: "2026-10-05T16:00" }));
+    const enc = new TextEncoder();
+    for (const line of ics.split("\r\n")) {
+      assert(enc.encode(line).length <= 75, `超過 75 bytes：${line}`);
+    }
+    assert(icsLine(ics, "SUMMARY") === `SUMMARY:截止：${name}`);
   });
 })();
 

@@ -2,7 +2,8 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- P7T7: viewport-fit=cover gives env(safe-area-inset-bottom) a value on iPhone -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Stairs</title>
   <!-- P5T6: one local PNG for the browser tab and the iPhone home screen -->
   <link rel="icon" type="image/png" href="img/icon-180.png">
@@ -19,6 +20,8 @@
   <!-- P1T1: load order fixed by ARCHITECTURE §1.1 -->
   <script src="js/state.js"></script>
   <script src="js/storage.js"></script>
+  <!-- P7T4: picker before view, which builds the dialog around it -->
+  <script src="js/picker.js"></script>
   <script src="js/view.js"></script>
   <script src="js/drag.js"></script>
   <script src="js/app.js"></script>

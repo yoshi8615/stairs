@@ -23,7 +23,12 @@
   --font-serif: "Iowan Old Style", "Palatino Linotype", Georgia, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", serif;
   /* P5T3: staircase indent per step and the step after which it stops growing */
   --stair: 20px;
-  --stair-max: 8;
+  /* P7T2: the third step and every later one share the same indent (SPEC v1.6 §5.3) */
+  --stair-max: 2;
+  /* P7T7: open / done switch (Claude-style segmented control) */
+  --track: #ebe8df;
+  --thumb: #ffffff;
+  --tabbar-space: 84px;
 }
 
 /* P3T1: dark mode follows the system setting; P5T1: near-black + brighter orange */
@@ -47,6 +52,8 @@
     --warn-text: #f5d88a;
     --overlay: rgba(0, 0, 0, 0.6);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+    --track: #262523;
+    --thumb: #3d3b37;
   }
 }
 
@@ -111,6 +118,8 @@ body {
   background: var(--sidebar);
   border-right: 1px solid var(--border);
   padding: 24px 16px;
+  /* P7T7: the fixed switch never covers the last item */
+  padding-bottom: calc(24px + var(--tabbar-space) + env(safe-area-inset-bottom));
 }
 
 /* P5T1: serif brand with the stairs mark */
@@ -136,6 +145,7 @@ body {
   width: 100%;
   max-width: 760px;
   padding: 32px 40px;
+  padding-bottom: calc(32px + var(--tabbar-space) + env(safe-area-inset-bottom));
 }
 
 .empty {
@@ -266,6 +276,50 @@ body {
   font-weight: 600;
 }
 
+/* P7T7: done tab — gray name with the completion date under it (SPEC v1.6 F10) */
+.project-item-name,
+.project-item-meta {
+  display: block;
+}
+
+.project-item-done .project-item-name {
+  color: var(--done-text);
+}
+
+.project-item-meta {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+/* P7T6: one gray separator per deadline day (SPEC v1.6 F9) */
+.project-sep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 4px 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.project-sep:first-child {
+  margin-top: 0;
+}
+
+.project-sep::before,
+.project-sep::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.side-empty {
+  padding: 8px 4px 16px;
+  font-size: 0.9rem;
+}
+
 .add-project {
   flex-direction: column;
 }
@@ -291,6 +345,39 @@ body {
   width: 100%;
   font-size: inherit;
   font-weight: inherit;
+}
+
+/* P7T5: F8 deadline button; P7T9: the calendar button shares the row */
+.deadline-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.deadline-btn {
+  min-height: 32px;
+  padding: 0 10px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.deadline-btn .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.deadline-btn:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--hover);
+  color: var(--text);
+}
+
+.deadline-btn.has-deadline {
+  color: var(--text);
 }
 
 .progress {
@@ -341,6 +428,35 @@ body {
   border-radius: var(--radius);
   background: var(--surface);
   transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+/* P7T3: no handle — a not-done row is the grab area. pan-y keeps a plain swipe scrolling;
+   no text selection or iOS callout so a long press can turn into a drag (A11). */
+.step {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: pan-y;
+}
+
+.step-current,
+.step-locked {
+  cursor: grab;
+}
+
+.step .rename-input {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.step.pressing {
+  transition: transform 0.4s ease-out, box-shadow 0.4s ease-out;
+  transform: scale(0.99);
+}
+
+.step.lifted {
+  opacity: 0.85;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
 .step-title {
@@ -460,37 +576,7 @@ body {
   cursor: not-allowed;
 }
 
-/* P3T7: fixed-width arrow column keeps rows aligned */
-.arrows {
-  display: flex;
-  flex-shrink: 0;
-  width: 80px;
-}
-
-/* P3T8: drag handle, dragged row, drop line */
-.handle {
-  width: 28px;
-  min-height: 40px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  cursor: grab;
-  user-select: none;
-  /* stops the page from scrolling when a touch drag starts on the handle */
-  touch-action: none;
-}
-
-.handle .icon {
-  width: 16px;
-  height: 16px;
-}
-
-.handle-off {
-  cursor: default;
-}
-
+/* P3T8: dragged row, drop line */
 .step.dragging {
   opacity: 0.4;
 }
@@ -636,13 +722,34 @@ body.is-dragging {
   animation-duration: 0.22s;
 }
 
-/* P6T2: a step that only exists on one side is being added or deleted */
-::view-transition-new(*.step):only-child {
+/* P6T2: a step that only exists on one side is being added or deleted;
+   P7T8: same for sidebar entries entering / leaving a tab */
+::view-transition-new(*.step):only-child,
+::view-transition-new(*.proj):only-child {
   animation: step-in 0.22s cubic-bezier(0.2, 0, 0, 1) both;
 }
 
-::view-transition-old(*.step):only-child {
+::view-transition-old(*.step):only-child,
+::view-transition-old(*.proj):only-child {
   animation: step-out 0.18s ease-in both;
+}
+
+/* P7T8: the switch track, thumb and labels are captured separately; paint order keeps the
+   labels above the sliding thumb */
+.tabs {
+  view-transition-name: tabs;
+}
+
+.tabs-thumb {
+  view-transition-name: tabs-thumb;
+}
+
+#tab-open {
+  view-transition-name: tab-open;
+}
+
+#tab-done {
+  view-transition-name: tab-done;
 }
 
 @keyframes step-in {
@@ -726,6 +833,226 @@ body.is-dragging {
   .dialog {
     animation: none;
   }
+
+  .step.pressing {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* P7T7: open / done switch fixed at the bottom center (SPEC v1.6 F10, A15) */
+.tabbar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 5;
+  transform: translateX(-50%);
+}
+
+.tabs {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--track);
+  box-shadow: var(--shadow);
+}
+
+.tabs-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 999px;
+  background: var(--thumb);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.tabs-thumb.is-right {
+  transform: translateX(100%);
+}
+
+.tab {
+  position: relative;
+  min-width: 104px;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* P7T4: date-time picker (SPEC v1.6 F8) */
+.dialog-picker {
+  width: min(360px, 100%);
+  max-height: 100%;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.dialog-title {
+  margin: 0 0 8px;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+}
+
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cal-title {
+  font-weight: 600;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-navs {
+  display: flex;
+}
+
+.cal-nav {
+  color: var(--accent);
+}
+
+.cal-nav .icon {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.4;
+}
+
+.cal-weekdays,
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  justify-items: center;
+}
+
+.cal-weekdays {
+  margin: 8px 0 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.cal-grid {
+  row-gap: 2px;
+}
+
+.cal-day {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.cal-day:hover {
+  background: var(--hover);
+}
+
+.cal-day.is-today {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* selected day: solid orange circle; text uses the same color as primary buttons (4.5:1) */
+.cal-day.is-selected {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+/* hour wheel: 5 visible rows, scroll-snap, faded toward the edges */
+.wheel {
+  --wheel-item: 36px;
+  position: relative;
+  margin: 12px 0 16px;
+}
+
+.wheel-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--wheel-item) * 2);
+  height: var(--wheel-item);
+  border-radius: var(--radius);
+  background: var(--hover);
+  pointer-events: none;
+}
+
+.wheel-scroll {
+  position: relative;
+  height: calc(var(--wheel-item) * 5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(transparent, #000 35%, #000 65%, transparent);
+  mask-image: linear-gradient(transparent, #000 35%, #000 65%, transparent);
+  border-radius: var(--radius);
+}
+
+.wheel-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.wheel-scroll:focus-visible {
+  outline-offset: -2px;
+}
+
+.wheel-pad {
+  height: calc(var(--wheel-item) * 2);
+}
+
+.wheel-item {
+  height: var(--wheel-item);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: center;
+  color: var(--muted);
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.wheel-item.is-selected {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.picker-actions {
+  flex-wrap: wrap;
+}
+
+.actions-side {
+  margin-right: auto;
 }
 
 /* P3T10: storage warning bar */
@@ -739,8 +1066,9 @@ body.is-dragging {
 /* P3T10: phone width, projects on top and steps below */
 @media (max-width: 639.98px) {
   /* P5T3: shallower stairs so titles keep their width */
+  /* P7T2: 1.5× the v1.5 phone indent */
   :root {
-    --stair: 6px;
+    --stair: 9px;
   }
 
   .layout {
@@ -760,23 +1088,11 @@ body.is-dragging {
 
   .main {
     padding: 16px;
+    padding-bottom: calc(16px + var(--tabbar-space) + env(safe-area-inset-bottom));
   }
 
-  .handle {
-    width: 32px;
-  }
-
-  /* title keeps the first line; ↑↓ ✏️ 🗑️ wrap to a right-aligned second line */
-  .step {
-    flex-wrap: wrap;
-  }
-
-  .step-title,
-  .step .rename-input {
-    flex: 1 1 calc(100% - 120px);
-  }
-
-  .arrows {
-    margin-left: auto;
+  /* P7T7: on phones the sidebar sits on top, only the page bottom needs the room */
+  .sidebar {
+    padding-bottom: 16px;
   }
 }
