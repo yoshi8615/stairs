@@ -20,6 +20,8 @@
 stairs/
 ├── index.html          ← 主程式入口，雙擊就能用
 ├── test.html           ← 資料邏輯的自動檢查頁，雙擊就能跑
+├── img/
+│   └── icon-180.png    ← App 圖示：瀏覽器分頁和 iPhone 主畫面共用
 ├── css/
 │   └── style.css       ← 全部樣式、CSS 變數、深色模式、手機版面、彩帶動畫
 ├── js/
