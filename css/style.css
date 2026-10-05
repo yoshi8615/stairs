@@ -604,6 +604,112 @@ body.is-dragging {
   }
 }
 
+/* P6T1: view transitions. Only named parts animate; the rest of the page swaps instantly. */
+.progress-fill {
+  view-transition-name: progress-fill;
+}
+
+.add-form[data-form="add-step"] {
+  view-transition-name: add-step;
+}
+
+::view-transition {
+  /* clicks go straight through to the already-updated page (SPEC v1.4: never block input) */
+  pointer-events: none;
+}
+
+::view-transition-old(root) {
+  display: none;
+}
+
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-group(*) {
+  animation-duration: 0.22s;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: 0.22s;
+}
+
+/* P6T2: a step that only exists on one side is being added or deleted */
+::view-transition-new(*.step):only-child {
+  animation: step-in 0.22s cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+::view-transition-old(*.step):only-child {
+  animation: step-out 0.18s ease-in both;
+}
+
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes step-out {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* P6T2: one-shot cues on the step that just changed */
+.step-just-done .check,
+.step-just-done .check-mark {
+  animation: check-pop 0.32s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes check-pop {
+  0% {
+    transform: scale(0.5);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.step-just-unlocked {
+  animation: unlock-glow 0.6s ease-out;
+}
+
+@keyframes unlock-glow {
+  from {
+    box-shadow: 0 0 0 10px var(--accent-soft), var(--shadow);
+  }
+}
+
+/* P6T2: dialogs fade and grow in */
+.dialog-overlay {
+  animation: fade-in 0.18s ease-out;
+}
+
+.dialog {
+  animation: dialog-in 0.22s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+}
+
+/* P3T9: no confetti; P6T2: no other motion either (view transitions are skipped in view.js) */
 @media (prefers-reduced-motion: reduce) {
   .confetti {
     display: none;
@@ -611,6 +717,14 @@ body.is-dragging {
 
   .progress-fill {
     transition: none;
+  }
+
+  .step-just-done .check,
+  .step-just-done .check-mark,
+  .step-just-unlocked,
+  .dialog-overlay,
+  .dialog {
+    animation: none;
   }
 }
 

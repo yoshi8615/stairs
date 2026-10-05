@@ -148,19 +148,29 @@ Stairs.view = (() => {
       }, h("div", { class: "progress-fill", style: `width: ${pct}%` })));
   };
 
+  // P6T2: each step's status at the last render, so only a step that just changed animates
+  let lastStatus = new Map();
+
   // P3T3: step rows with the three looks of SPEC F3; P3T7 adds ↑↓ for not-done steps
   const buildSteps = (project, ui) => {
     const current = Q.getCurrentStepIndex(project);
     const firstOpen = Q.countDone(project);
     const last = project.steps.length - 1;
+    const prevStatus = lastStatus;
+    lastStatus = new Map();
     return h("ol", { class: "step-list", "data-step-list": "" },
       project.steps.map((step, i) => {
         const status = step.done ? "done" : i === current ? "current" : "locked";
         const locked = status === "locked";
+        const was = prevStatus.get(step.id);
+        lastStatus.set(step.id, status);
+        const just = status === "done" && was === "current" ? " step-just-done"
+          : status === "current" && was === "locked" ? " step-just-unlocked" : "";
         return h("li", {
-          class: `step step-${status}`,
+          class: `step step-${status}${just}`,
           // P5T3: stair level; CSS turns it into the capped indent
-          style: `--i: ${i}`,
+          // P6T1: own transition name so the row slides between positions
+          style: `--i: ${i}; view-transition-name: ${CSS.escape(`step-${step.id}`)}; view-transition-class: step`,
           title: locked ? LOCK_HINT : null,
           "aria-current": status === "current" ? "step" : null,
           "data-step-row": "",
@@ -271,6 +281,8 @@ Stairs.view = (() => {
 
   // P3T4: custom confirm (ARCHITECTURE §2.3, A1); initial focus on 取消 as the safe choice
   const confirm = (message, onYes) => {
+    // P6T1: the dialog must open over the current DOM
+    flush();
     if (dialog) return;
     const dismiss = () => closeDialog(true);
     const cancelBtn = h("button", { type: "button", class: "btn", text: "取消" });
@@ -322,7 +334,7 @@ Stairs.view = (() => {
   };
 
   // P3T1: full re-render; P3T6 adds focus save / restore (ARCHITECTURE §3.4)
-  const render = (state, ui) => {
+  const draw = (state, ui) => {
     const prevKey = getFocusKey();
     const wanted = ui.focusKey || prevKey;
 
@@ -347,6 +359,50 @@ Stairs.view = (() => {
     }
 
     if (ui.celebrate && !dialog) openCelebrate(ui.celebrate);
+  };
+
+  // P6T1: render inside a view transition (SPEC v1.4 §5.3). The browser runs the callback a frame
+  // later, so `pending` holds the newest arguments until then and flush() draws them right away
+  // whenever app needs the DOM to be current.
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let pending = null;
+  let transition = null;
+
+  const flush = () => {
+    if (!pending) return;
+    const { state, ui } = pending;
+    pending = null;
+    draw(state, ui);
+    transition.skipTransition();
+  };
+
+  const render = (state, ui) => {
+    // app clears ui.focusKey right after render returns; keep the values from this call
+    const args = { state, ui: { ...ui } };
+    const animate = typeof document.startViewTransition === "function" && !reduceMotion.matches &&
+      !dialog && !ui.celebrate && root.hasChildNodes();
+    if (!animate) {
+      if (pending) {
+        pending = null;
+        transition.skipTransition();
+      }
+      draw(args.state, args.ui);
+      return;
+    }
+    if (pending) {
+      pending = args; // the transition already waiting will draw the newest state
+      return;
+    }
+    pending = args;
+    transition = document.startViewTransition(() => {
+      if (!pending) return;
+      const a = pending;
+      pending = null;
+      draw(a.state, a.ui);
+    });
+    // a skipped transition rejects `ready`; that is expected, not an error
+    transition.ready.catch(() => {});
+    transition.updateCallbackDone.catch((e) => console.error(e));
   };
 
   // P3T5: rename commit on blur. A mouse click elsewhere first blurs the input; committing right
@@ -446,5 +502,6 @@ Stairs.view = (() => {
     document.addEventListener("pointercancel", onPointerEnd, true);
   };
 
-  return { init, render, confirm, getFocusKey };
+  // P6T1: focus is read from the DOM, so it must be current
+  return { init, render, confirm, getFocusKey: () => { flush(); return getFocusKey(); } };
 })();
