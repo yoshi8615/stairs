@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stairs</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- P1T1: app root; filled by view.render in P3 -->
+  <div id="app"></div>
+  <!-- P3T4: dialogs live outside #app so a full re-render never removes them -->
+  <div id="dialog-root"></div>
+
+  <!-- P1T1: load order fixed by ARCHITECTURE §1.1 -->
+  <script src="js/state.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/view.js"></script>
+  <script src="js/drag.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

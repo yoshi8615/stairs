@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stairs 測試</title>
+  <!-- P1T1: minimal result styles, kept local so test.html does not depend on style.css -->
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 16px; }
+    #summary { font-size: 1.25rem; font-weight: bold; }
+    #summary.pass, .pass { color: #1a7f37; }
+    #summary.fail, .fail { color: #cf222e; }
+    #results { list-style: none; padding: 0; }
+    #results li { padding: 2px 0; }
+    #results .detail { margin-left: 1.5em; font-family: monospace; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <!-- P1T1: test result containers filled by tests.js -->
+  <div id="summary"></div>
+  <ul id="results"></ul>
+
+  <!-- P1T1: load order fixed by ARCHITECTURE §1.1 -->
+  <script src="js/state.js"></script>
+  <script src="js/tests.js"></script>
+</body>
+</html>
