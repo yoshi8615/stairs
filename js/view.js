@@ -29,18 +29,42 @@ Stairs.view = (() => {
     return el;
   };
 
-  const iconBtn = (text, label, action, id, focusKey, extra = {}) =>
+  // P5T2: line icons (SPEC v1.3 §5.3). Parsed as HTML so the SVG namespace comes for free;
+  // strokes take currentColor, so every icon follows the text color in both themes.
+  const ICONS = {
+    grip: '<circle class="dot" cx="9" cy="6" r="1.4"/><circle class="dot" cx="15" cy="6" r="1.4"/><circle class="dot" cx="9" cy="12" r="1.4"/><circle class="dot" cx="15" cy="12" r="1.4"/><circle class="dot" cx="9" cy="18" r="1.4"/><circle class="dot" cx="15" cy="18" r="1.4"/>',
+    pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+    trash: '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+    down: '<path d="M12 5v14M19 12l-7 7-7-7"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    stairs: '<path d="M3 20h5v-5h5v-5h5V5h3"/>',
+  };
+  const iconTpl = {};
+  const icon = (name, cls = "") => {
+    if (!iconTpl[name]) {
+      const t = document.createElement("template");
+      t.innerHTML = `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
+      iconTpl[name] = t.content.firstChild;
+    }
+    const el = iconTpl[name].cloneNode(true);
+    if (cls) el.classList.add(cls);
+    return el;
+  };
+
+  const iconBtn = (name, label, action, id, focusKey, extra = {}) =>
     h("button", {
       type: "button",
       class: "btn icon-btn",
-      text,
       "aria-label": label,
       title: label,
       "data-action": action,
       "data-id": id,
       "data-focus-key": focusKey,
       ...extra,
-    });
+    }, icon(name));
 
   // P3T6: focus keys (ARCHITECTURE §3.4)
   const getFocusKey = () => {
@@ -83,7 +107,7 @@ Stairs.view = (() => {
   // P3T2: project list and add-project form
   const buildSidebar = (state) =>
     h("aside", { class: "sidebar" },
-      h("h1", { class: "brand", text: "Stairs" }),
+      h("h1", { class: "brand" }, icon("stairs", "brand-icon"), "Stairs"),
       h("nav", { "aria-label": "專案清單" },
         h("ul", { class: "project-list" },
           state.projects.map((p) =>
@@ -107,7 +131,7 @@ Stairs.view = (() => {
           "data-draft": "add-project",
           "data-focus-key": "add-project-input",
         }),
-        h("button", { type: "submit", class: "btn btn-primary", text: "＋ 新增", "data-focus-key": "add-project-submit" })));
+        h("button", { type: "submit", class: "btn btn-primary", "data-focus-key": "add-project-submit" }, icon("plus"), "新增")));
 
   // P3T1: progress text and bar
   const buildProgress = (done, total) => {
@@ -135,6 +159,8 @@ Stairs.view = (() => {
         const locked = status === "locked";
         return h("li", {
           class: `step step-${status}`,
+          // P5T3: stair level; CSS turns it into the capped indent
+          style: `--i: ${i}`,
           title: locked ? LOCK_HINT : null,
           "aria-current": status === "current" ? "step" : null,
           "data-step-row": "",
@@ -143,7 +169,7 @@ Stairs.view = (() => {
         },
           step.done
             ? h("span", { class: "handle handle-off", "aria-hidden": "true" })
-            : h("span", { class: "handle", text: "⋮⋮", "aria-hidden": "true", "data-drag-handle": "" }),
+            : h("span", { class: "handle", "aria-hidden": "true", "data-drag-handle": "" }, icon("grip")),
           // label widens the hit area to 40×40 without making the title clickable
           h("label", { class: "check-hit" },
             h("input", {
@@ -157,18 +183,20 @@ Stairs.view = (() => {
               "data-action": "toggle",
               "data-id": step.id,
               "data-focus-key": `step-check:${step.id}`,
-            })),
-          locked ? h("span", { class: "lock", text: "🔒", "aria-hidden": "true" }) : null,
+            }),
+            // P5T3: drawn tick over the restyled checkbox, shown by CSS when checked
+            icon("check", "check-mark")),
+          locked ? h("span", { class: "lock", "aria-hidden": "true" }, icon("lock")) : null,
           buildName(ui, "step", step.id, step.title, "step-title"),
           h("span", { class: "arrows" },
             step.done
               ? null
               : [
-                  iconBtn("↑", `上移：${step.title}`, "move-up", step.id, `step-up:${step.id}`, { disabled: i === firstOpen }),
-                  iconBtn("↓", `下移：${step.title}`, "move-down", step.id, `step-down:${step.id}`, { disabled: i === last }),
+                  iconBtn("up", `上移：${step.title}`, "move-up", step.id, `step-up:${step.id}`, { disabled: i === firstOpen }),
+                  iconBtn("down", `下移：${step.title}`, "move-down", step.id, `step-down:${step.id}`, { disabled: i === last }),
                 ]),
-          iconBtn("✏️", `改名步驟：${step.title}`, "start-rename", step.id, `rename:step:${step.id}`, { "data-kind": "step" }),
-          iconBtn("🗑️", `刪除步驟：${step.title}`, "delete-step", step.id, `delete-step:${step.id}`));
+          iconBtn("pencil", `改名步驟：${step.title}`, "start-rename", step.id, `rename:step:${step.id}`, { "data-kind": "step" }),
+          iconBtn("trash", `刪除步驟：${step.title}`, "delete-step", step.id, `delete-step:${step.id}`));
       }));
   };
 
@@ -183,8 +211,8 @@ Stairs.view = (() => {
     return h("main", { class: "main" },
       h("header", { class: "project-header" },
         h("h2", { class: "project-name" }, buildName(ui, "project", project.id, project.name, "name-text")),
-        iconBtn("✏️", `改名專案：${project.name}`, "start-rename", project.id, `rename:project:${project.id}`, { "data-kind": "project" }),
-        iconBtn("🗑️", `刪除專案：${project.name}`, "delete-project", project.id, "delete-project")),
+        iconBtn("pencil", `改名專案：${project.name}`, "start-rename", project.id, `rename:project:${project.id}`, { "data-kind": "project" }),
+        iconBtn("trash", `刪除專案：${project.name}`, "delete-project", project.id, "delete-project")),
       buildProgress(Q.countDone(project), total),
       total === 0
         ? h("p", { class: "empty", text: "這個專案還沒有步驟。在下面新增第一階。" })
@@ -199,7 +227,7 @@ Stairs.view = (() => {
           "data-draft": "add-step",
           "data-focus-key": "add-step-input",
         }),
-        h("button", { type: "submit", class: "btn btn-primary", text: "＋ 新增", "data-focus-key": "add-step-submit" })));
+        h("button", { type: "submit", class: "btn btn-primary", "data-focus-key": "add-step-submit" }, icon("plus"), "新增")));
   };
 
   // P3T4: shared dialog for confirm and celebrate (role, focus in, Esc / outside click, focus back)

@@ -1,40 +1,52 @@
-/* P3T1: color tokens (SPEC §5.3) */
+/* P3T1: color tokens (SPEC §5.3); P5T1: warm off-white + orange */
 :root {
   color-scheme: light dark;
-  --bg: #f6f7f9;
+  --bg: #faf9f5;
+  --sidebar: #f3f1ea;
   --surface: #ffffff;
-  --text: #1f2328;
-  --muted: #646b75;
-  --border: #d9dde3;
-  --accent: #2f6fde;
+  --hover: #ebe8df;
+  --text: #1f1e1d;
+  --muted: #6f6b63;
+  --border: #e3dfd5;
+  /* deep enough for white text at 4.5:1 */
+  --accent: #b85636;
   --on-accent: #ffffff;
-  --accent-soft: #e8effc;
-  --done-text: #858c96;
-  --locked-text: #9aa0a8;
-  --locked-bg: #f0f1f3;
+  --accent-soft: #f7ebe4;
+  --done-text: #8f8a80;
+  --locked-text: #a29d93;
+  --locked-bg: #f1efe9;
   --warn-bg: #fff3cd;
   --warn-text: #6b4e00;
-  --overlay: rgba(15, 20, 30, 0.45);
-  --radius: 8px;
+  --overlay: rgba(20, 18, 15, 0.45);
+  --shadow: 0 1px 2px rgba(31, 30, 29, 0.06), 0 4px 14px rgba(31, 30, 29, 0.06);
+  --radius: 10px;
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Georgia, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", serif;
+  /* P5T3: staircase indent per step and the step after which it stops growing */
+  --stair: 20px;
+  --stair-max: 8;
 }
 
-/* P3T1: dark mode follows the system setting */
+/* P3T1: dark mode follows the system setting; P5T1: near-black + brighter orange */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14171c;
-    --surface: #1d2128;
-    --text: #e6e8eb;
-    --muted: #9aa1ab;
-    --border: #343a44;
-    --accent: #6ea0ff;
-    --on-accent: #0b1220;
-    --accent-soft: #212f48;
-    --done-text: #7c838d;
-    --locked-text: #6b727c;
-    --locked-bg: #181b21;
+    --bg: #141413;
+    --sidebar: #1a1918;
+    --surface: #201f1d;
+    --hover: #2b2a27;
+    --text: #ece9e1;
+    --muted: #a29d93;
+    --border: #34322e;
+    /* bright orange carries dark text instead of white */
+    --accent: #d97757;
+    --on-accent: #1a1310;
+    --accent-soft: #33241d;
+    --done-text: #7d786f;
+    --locked-text: #6e6a62;
+    --locked-bg: #181817;
     --warn-bg: #3d3214;
     --warn-text: #f5d88a;
     --overlay: rgba(0, 0, 0, 0.6);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -71,6 +83,23 @@ body {
   white-space: nowrap;
 }
 
+/* P5T2: line icons follow the text color */
+.icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon .dot {
+  fill: currentColor;
+  stroke: none;
+}
+
 /* P3T1: two-column layout (SPEC §5.1) */
 .layout {
   display: grid;
@@ -79,20 +108,34 @@ body {
 }
 
 .sidebar {
-  background: var(--surface);
+  background: var(--sidebar);
   border-right: 1px solid var(--border);
   padding: 24px 16px;
 }
 
+/* P5T1: serif brand with the stairs mark */
 .brand {
-  margin: 0 0 16px;
-  font-size: 1.4rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 20px;
+  padding: 0 4px;
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.brand-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--accent);
+  stroke-width: 2.4;
 }
 
 .main {
   width: 100%;
   max-width: 760px;
-  padding: 24px 32px;
+  padding: 32px 40px;
 }
 
 .empty {
@@ -101,21 +144,26 @@ body {
   margin: 0;
 }
 
-/* P3T1: buttons and inputs (P3T10: every button is at least 40×40) */
+/* P3T1: buttons and inputs (P3T10: every button is at least 40×40); P5T4: restyled */
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-width: 40px;
   min-height: 40px;
-  padding: 0 12px;
+  padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
   font: inherit;
   cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--muted);
 }
 
 .btn:disabled {
@@ -127,6 +175,12 @@ body {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
+  font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+  border-color: var(--accent);
+  filter: brightness(1.08);
 }
 
 .icon-btn {
@@ -136,6 +190,13 @@ body {
   flex-shrink: 0;
   border-color: transparent;
   background: transparent;
+  color: var(--muted);
+}
+
+.icon-btn:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--hover);
+  color: var(--text);
 }
 
 .text-input {
@@ -144,9 +205,20 @@ body {
   padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
   font: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.text-input::placeholder {
+  color: var(--muted);
+}
+
+.text-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  outline: none;
 }
 
 .add-form {
@@ -158,14 +230,14 @@ body {
   flex: 1;
 }
 
-/* P3T2: project list; the open project is highlighted */
+/* P3T2: project list; the open project is highlighted; P5T4: sidebar look */
 .project-list {
   list-style: none;
   margin: 0 0 16px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .project-item {
@@ -173,7 +245,7 @@ body {
   min-height: 40px;
   padding: 8px 12px;
   border: 0;
-  border-left: 4px solid transparent;
+  border-left: 3px solid transparent;
   border-radius: var(--radius);
   background: transparent;
   color: var(--text);
@@ -181,14 +253,15 @@ body {
   text-align: left;
   overflow-wrap: anywhere;
   cursor: pointer;
+  transition: background-color 0.15s;
 }
 
 .project-item:hover {
-  background: var(--accent-soft);
+  background: var(--hover);
 }
 
 .project-item[aria-current="true"] {
-  background: var(--accent-soft);
+  background: var(--hover);
   border-left-color: var(--accent);
   font-weight: 600;
 }
@@ -197,7 +270,7 @@ body {
   flex-direction: column;
 }
 
-/* P3T1: project header and progress */
+/* P3T1: project header and progress; P5T1: serif project name */
 .project-header {
   display: flex;
   align-items: center;
@@ -208,7 +281,9 @@ body {
   flex: 1;
   min-width: 0;
   margin: 0;
-  font-size: 1.5rem;
+  font-family: var(--font-serif);
+  font-size: 1.75rem;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
@@ -222,13 +297,15 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 8px 0 20px;
+  margin: 8px 0 24px;
   color: var(--muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .progress-bar {
   flex: 1;
-  height: 10px;
+  height: 6px;
   border-radius: 999px;
   background: var(--border);
   overflow: hidden;
@@ -236,6 +313,7 @@ body {
 
 .progress-fill {
   height: 100%;
+  border-radius: 999px;
   background: var(--accent);
   transition: width 0.3s;
 }
@@ -244,22 +322,25 @@ body {
 .step-list {
   position: relative;
   list-style: none;
-  margin: 0 0 16px;
+  margin: 0 0 20px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
+/* P5T3: each step sits one stair further right, capped at --stair-max */
 .step {
   display: flex;
   align-items: center;
   gap: 2px;
+  margin-left: calc(min(var(--i, 0), var(--stair-max)) * var(--stair));
   padding: 2px 4px;
   border: 1px solid var(--border);
   border-left: 4px solid transparent;
   border-radius: var(--radius);
   background: var(--surface);
+  transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 .step-title {
@@ -273,32 +354,52 @@ body {
   flex: 1;
 }
 
+/* P5T3: done — receded step, flat on the page */
+.step-done {
+  background: transparent;
+}
+
 .step-done .step-title {
   color: var(--done-text);
   text-decoration: line-through;
 }
 
+/* P5T3: current — the only raised, outlined step */
 .step-current {
   border-color: var(--accent);
   border-left-color: var(--accent);
-  background: var(--accent-soft);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow);
 }
 
 .step-current .step-title {
   font-weight: 600;
 }
 
+/* P5T3: locked — gray, dashed, with a lock icon */
 .step-locked {
   background: var(--locked-bg);
+  border-style: dashed;
+  border-left-style: solid;
+  color: var(--locked-text);
+}
+
+.step-locked .icon-btn {
   color: var(--locked-text);
 }
 
 .lock {
-  font-size: 0.9rem;
-  filter: grayscale(1);
+  display: flex;
+  color: var(--locked-text);
+}
+
+.lock .icon {
+  width: 16px;
+  height: 16px;
 }
 
 .check-hit {
+  position: relative;
   width: 40px;
   height: 40px;
   flex-shrink: 0;
@@ -308,12 +409,50 @@ body {
   cursor: pointer;
 }
 
+/* P5T3: drawn checkbox; the native box is replaced but stays a real <input> (SPEC §6) */
 .check {
-  width: 20px;
-  height: 20px;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
   margin: 0;
-  accent-color: var(--accent);
+  border: 2px solid var(--muted);
+  border-radius: 7px;
+  background: var(--surface);
   cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.step-current .check {
+  border-color: var(--accent);
+}
+
+.check:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.check-mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  color: var(--on-accent);
+  stroke-width: 3;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.check:checked + .check-mark {
+  opacity: 1;
+}
+
+.check:disabled {
+  border-style: dashed;
+  border-color: var(--locked-text);
+  background: transparent;
 }
 
 .check:disabled,
@@ -343,6 +482,11 @@ body {
   touch-action: none;
 }
 
+.handle .icon {
+  width: 16px;
+  height: 16px;
+}
+
 .handle-off {
   cursor: default;
 }
@@ -367,7 +511,7 @@ body.is-dragging {
   user-select: none;
 }
 
-/* P3T4: shared dialog */
+/* P3T4: shared dialog; P5T4: softer panel */
 .dialog-overlay {
   position: fixed;
   inset: 0;
@@ -381,12 +525,13 @@ body.is-dragging {
 
 .dialog {
   position: relative;
-  width: min(360px, 100%);
+  width: min(380px, 100%);
   padding: 24px;
-  border-radius: 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
   background: var(--surface);
   color: var(--text);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
   overflow: hidden;
 }
 
@@ -417,7 +562,8 @@ body.is-dragging {
 .celebrate-title {
   position: relative;
   margin: 8px 0 4px;
-  font-size: 1.5rem;
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
 }
 
 .celebrate-project {
@@ -478,6 +624,11 @@ body.is-dragging {
 
 /* P3T10: phone width, projects on top and steps below */
 @media (max-width: 639.98px) {
+  /* P5T3: shallower stairs so titles keep their width */
+  :root {
+    --stair: 6px;
+  }
+
   .layout {
     grid-template-columns: minmax(0, 1fr);
     min-height: 0;
