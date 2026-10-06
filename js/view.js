@@ -219,6 +219,7 @@ Stairs.view = (() => {
   // P3T3: step rows with the three looks of SPEC F3; P7T3: no handle or ↑↓, the whole row drags
   const buildSteps = (project, ui) => {
     const current = Q.getCurrentStepIndex(project);
+    const doneCount = Q.countDone(project);
     const prevStatus = lastStatus;
     lastStatus = new Map();
     return h("ol", { class: "step-list", "data-step-list": "" },
@@ -232,9 +233,10 @@ Stairs.view = (() => {
         const keys = step.done ? null : MOVE_KEYS;
         return h("li", {
           class: `step step-${status}${just}`,
-          // P5T3: stair level; CSS turns it into the capped indent
+          // P5T3: stair level; CSS turns it into the capped indent.
+          // P8T4: done steps sit flat; the stairs restart at the current step (SPEC v1.9 §5.3)
           // P6T1: own transition name so the row slides between positions
-          style: `--i: ${i}; view-transition-name: ${CSS.escape(`step-${step.id}`)}; view-transition-class: step`,
+          style: `--i: ${step.done ? 0 : i - doneCount}; view-transition-name: ${CSS.escape(`step-${step.id}`)}; view-transition-class: step`,
           title: locked ? LOCK_HINT : null,
           "aria-current": status === "current" ? "step" : null,
           "data-step-row": "",
@@ -267,8 +269,28 @@ Stairs.view = (() => {
       }));
   };
 
-  // P7T9: SPEC v1.7 F11 — the calendar never follows later changes, so say so on the button
-  const CALENDAR_HINT = "下載行事曆檔，截止前 24 小時提醒。之後改截止日期要重新加入。";
+  // P7T9: SPEC v1.7 F11 — the calendar never follows later changes, so say so on the button;
+  // P8T2: three looks from calendarDeadline vs deadline (SPEC v1.9 F11, A21)
+  const CALENDAR_STATES = {
+    add: { label: "加入行事曆", icon: "bell", hint: "下載行事曆檔，截止前 24 小時提醒。之後改截止日期要重新加入。" },
+    added: { label: "已加入行事曆", icon: "check", hint: "已經下載過行事曆檔。點一下看怎麼取消。" },
+    stale: { label: "重新加入行事曆", icon: "bell", hint: "截止日期改過了，行事曆裡是舊的時間。點一下重新加入。" },
+  };
+  const calendarState = (p) =>
+    p.calendarDeadline === null ? "add" : p.calendarDeadline === p.deadline ? "added" : "stale";
+
+  const buildCalendarButton = (project) => {
+    const kind = calendarState(project);
+    const look = CALENDAR_STATES[kind];
+    return h("button", {
+      type: "button",
+      class: `btn deadline-btn calendar-${kind}`,
+      title: look.hint,
+      "aria-description": look.hint,
+      "data-action": "add-to-calendar",
+      "data-focus-key": "calendar-btn",
+    }, icon(look.icon), look.label);
+  };
 
   // P3T1: right side, including the two empty states of SPEC §5.2
   const buildMain = (state, ui) => {
@@ -294,16 +316,7 @@ Stairs.view = (() => {
         },
           icon("calendar"),
           project.deadline ? `截止 ${deadlineDay(project.deadline)} ${project.deadline.slice(11, 16)}` : "設定截止日期"),
-        project.deadline
-          ? h("button", {
-              type: "button",
-              class: "btn deadline-btn",
-              title: CALENDAR_HINT,
-              "aria-description": CALENDAR_HINT,
-              "data-action": "add-to-calendar",
-              "data-focus-key": "calendar-btn",
-            }, icon("bell"), "加入行事曆")
-          : null),
+        project.deadline ? buildCalendarButton(project) : null),
       buildProgress(Q.countDone(project), total),
       total === 0
         ? h("p", { class: "empty", text: "這個專案還沒有步驟。在下面新增第一階。" })
@@ -386,15 +399,16 @@ Stairs.view = (() => {
     if (el && !el.disabled) el.focus();
   };
 
-  // P3T4: custom confirm (ARCHITECTURE §2.3, A1); initial focus on 取消 as the safe choice
-  const confirm = (message, onYes) => {
+  // P3T4: custom confirm (ARCHITECTURE §2.3, A1); initial focus on 取消 as the safe choice.
+  // P8T2: labels rename the buttons; no: null leaves a single button, which then takes focus.
+  const confirm = (message, onYes, { yes = "確定", no = "取消" } = {}) => {
     // P6T1: the dialog must open over the current DOM
     flush();
     if (dialog) return;
     const dismiss = () => closeDialog(true);
-    const cancelBtn = h("button", { type: "button", class: "btn", text: "取消" });
-    const yesBtn = h("button", { type: "button", class: "btn btn-primary", text: "確定" });
-    cancelBtn.addEventListener("click", dismiss);
+    const cancelBtn = no === null ? null : h("button", { type: "button", class: "btn", text: no });
+    const yesBtn = h("button", { type: "button", class: "btn btn-primary", text: yes });
+    if (cancelBtn) cancelBtn.addEventListener("click", dismiss);
     yesBtn.addEventListener("click", () => {
       closeDialog(true);
       onYes();
@@ -407,7 +421,7 @@ Stairs.view = (() => {
         h("p", { id: "dialog-message", class: "dialog-message", text: message }),
         h("div", { class: "dialog-actions" }, cancelBtn, yesBtn),
       ],
-      focusEl: cancelBtn,
+      focusEl: cancelBtn || yesBtn,
       onDismiss: dismiss,
       returnKey: getFocusKey(),
     });
@@ -470,7 +484,7 @@ Stairs.view = (() => {
 
   // P3T9: celebrate dialog; confetti is pure CSS, each piece tuned by custom properties
   const CONFETTI_COUNT = 24;
-  const openCelebrate = ({ projectName, hasDeadline }) => {
+  const openCelebrate = ({ projectName }) => {
     const closeBtn = h("button", { type: "button", class: "btn btn-primary", text: "關閉" });
     closeBtn.addEventListener("click", () => handlers.onCloseCelebrate());
     const confetti = h("div", { class: "confetti", "aria-hidden": "true" },
@@ -486,8 +500,6 @@ Stairs.view = (() => {
         confetti,
         h("h2", { id: "celebrate-title", class: "celebrate-title", text: "🎉 全部完成！" }),
         h("p", { id: "celebrate-project", class: "celebrate-project", text: projectName }),
-        // P7T11: a web page cannot delete calendar events itself (SPEC v1.8 F5, A20)
-        hasDeadline ? h("p", { class: "celebrate-note", text: "如果加過行事曆，記得到行事曆刪掉這個截止事件。" }) : null,
         h("div", { class: "dialog-actions" }, closeBtn),
       ],
       focusEl: closeBtn,
@@ -523,8 +535,8 @@ Stairs.view = (() => {
     const el = wanted ? findByKey(wanted) : null;
     if (el && !el.disabled) {
       el.focus();
-      // select all only when the rename input first appears
-      if (wanted === "rename-input" && prevKey !== "rename-input") el.select();
+      // P8T3: caret at the end (not select-all) only when the rename input first appears (SPEC v1.9 F7)
+      if (wanted === "rename-input" && prevKey !== "rename-input") el.setSelectionRange(el.value.length, el.value.length);
     }
 
     if (ui.celebrate && !dialog) openCelebrate(ui.celebrate);

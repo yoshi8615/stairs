@@ -71,7 +71,9 @@ Stairs.state = (() => {
     const clean = cleanName(name, PROJECT_NAME_MAX);
     if (clean === null) return state;
     if (deadline !== null && !isValidDeadline(deadline)) return state;
-    const project = { id: newId("p_"), name: clean, createdAt: Date.now(), deadline, completedAt: null, steps: [] };
+    const project = {
+      id: newId("p_"), name: clean, createdAt: Date.now(), deadline, completedAt: null, calendarDeadline: null, steps: [],
+    };
     return { ...state, activeProjectId: project.id, projects: [...state.projects, project] };
   };
 
@@ -101,6 +103,14 @@ Stairs.state = (() => {
   };
 
   // P7T1: F8 set or clear (null) the deadline
+  // P8T1: F11 remembers the deadline that was last downloaded as a calendar file (A21)
+  const markCalendarAdded = (state, projectId) =>
+    updateProject(state, projectId, (p) =>
+      p.deadline === null || p.calendarDeadline === p.deadline ? p : { ...p, calendarDeadline: p.deadline });
+
+  const clearCalendarAdded = (state, projectId) =>
+    updateProject(state, projectId, (p) => (p.calendarDeadline === null ? p : { ...p, calendarDeadline: null }));
+
   const setDeadline = (state, projectId, deadline) => {
     if (deadline !== null && !isValidDeadline(deadline)) return state;
     return updateProject(state, projectId, (p) => (p.deadline === deadline ? p : { ...p, deadline }));
@@ -274,7 +284,10 @@ Stairs.state = (() => {
       : Number.isFinite(raw.completedAt) ? raw.completedAt
       : Date.now(); // A13: data older than v1.6 gets the load time
 
-    return { id: raw.id, name, createdAt: raw.createdAt, deadline, completedAt, steps: fixed };
+    // P8T1: a broken calendarDeadline only resets the button, never drops the project
+    const calendarDeadline = isValidDeadline(raw.calendarDeadline) ? raw.calendarDeadline : null;
+
+    return { id: raw.id, name, createdAt: raw.createdAt, deadline, completedAt, calendarDeadline, steps: fixed };
   };
 
   const normalize = (raw) => {
@@ -314,6 +327,8 @@ Stairs.state = (() => {
     setDeadline,
     listProjects,
     isValidDeadline,
+    markCalendarAdded,
+    clearCalendarAdded,
     toIcs,
     normalize,
   };

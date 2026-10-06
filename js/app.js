@@ -99,13 +99,33 @@ Stairs.app = (() => {
         (deadline) => dispatch(S.setDeadline, p.id, deadline));
     },
 
-    // P7T9: F11 download a calendar file; no state change, nothing saved
+    // P7T9: F11 download a calendar file; P8T2: three button states (SPEC v1.9 F11, A21)
     onAddToCalendar: () => {
-      const text = S.toIcs(activeProject());
-      if (text === null) return;
-      // characters no file system accepts become "_"
-      const base = activeProject().name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim() || "Stairs";
-      Stairs.view.download(`${base}.ics`, text, "text/calendar;charset=utf-8");
+      const p = activeProject();
+      if (!p || p.deadline === null) return;
+      const download = () => {
+        const text = S.toIcs(p);
+        if (text === null) return;
+        // characters no file system accepts become "_"
+        const base = p.name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim() || "Stairs";
+        Stairs.view.download(`${base}.ics`, text, "text/calendar;charset=utf-8");
+        dispatch(S.markCalendarAdded, p.id);
+      };
+      const when = (d) => `${d.slice(0, 10).replace(/-/g, "/")} ${d.slice(11, 16)}`;
+
+      if (p.calendarDeadline === null) return download();
+      if (p.calendarDeadline === p.deadline) {
+        // only 知道了 forgets the download; Esc / outside just close
+        return Stairs.view.confirm(
+          `這個專案已經加入過行事曆（截止 ${when(p.deadline)}）。網頁沒辦法幫你刪除行事曆裡的事件；` +
+          `要取消提醒，請到行事曆 App 刪掉「截止：${p.name}」。按「知道了」後，這裡會變回「加入行事曆」。`,
+          () => dispatch(S.clearCalendarAdded, p.id),
+          { yes: "知道了", no: null });
+      }
+      Stairs.view.confirm(
+        `截止日期改過了，行事曆裡還是舊的時間（${when(p.calendarDeadline)}）。下載新的行事曆檔後，請到行事曆 App 刪掉舊的事件。`,
+        download,
+        { yes: "下載新的", no: "取消" });
     },
 
     // P7T10: F12 drawer; focus goes to the open project in the list, else the add input (SPEC §6)
@@ -141,8 +161,7 @@ Stairs.app = (() => {
       const after = S.isProjectComplete(activeProject());
       if (!before && after) {
         celebrateReturnKey = Stairs.view.getFocusKey();
-        // P7T11: remind about the calendar event only when there could be one (A20)
-        ui.celebrate = { projectName: p.name, hasDeadline: p.deadline !== null };
+        ui.celebrate = { projectName: p.name };
       }
       render();
     },

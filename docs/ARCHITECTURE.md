@@ -1,6 +1,6 @@
 # Stairs 架構文件（ARCHITECTURE）
 
-> 對應規格：`SPEC.md` v1.8　｜　日期：2026-10-04（v1.6 的更新：2026-10-06）
+> 對應規格：`SPEC.md` v1.9　｜　日期：2026-10-04（v1.6 的更新：2026-10-06）
 
 ---
 
@@ -100,6 +100,7 @@ stairs/
 - 截止日期格式檢查：內部輔助函式 `isValidDeadline(s)`，`createProject`、`setDeadline`、`normalize` 共用。「真的日期」的檢查方式：拆出年月日時分，用 `new Date(Date.UTC(年, 月-1, 日))` 建出來後，年月日要和原本一樣（2 月 30 日會變成 3 月 2 日，就不一樣），時 ≤ 23、分 ≤ 59。用 UTC 是為了避開有日光節約時間的地區「某一小時不存在」的問題。
 - `listProjects(state, tab)`：分頁的篩選和排序（SPEC F9、F10）。放在這一層，因為它是純邏輯，`test.html` 可以直接測。截止日期是固定格式的字串，可以直接用字串比大小。**日期分組不在這裡做**，分隔線是畫面的事，由 view 比對相鄰兩個專案的 `deadline.slice(0, 10)` 決定。
 - `toIcs(project)`（v1.7，SPEC F11）：產生行事曆檔的文字。放在這一層，因為它是純文字轉換，`test.html` 可以直接測；它不碰 DOM，下載由畫面層做（§6 A16）。
+- `markCalendarAdded(state, projectId)` / `clearCalendarAdded(state, projectId)`（v1.9，SPEC F11）：把 `calendarDeadline` 設成目前的 `deadline` / `null`。存的是**截止日期字串**而不是「加過沒」的布林值，這樣改了截止日期後，比對兩者就知道行事曆是舊的（§6 A21）。`normalize` 對壞掉的 `calendarDeadline` 設成 `null`，和 `deadline` 用同一個 `isValidDeadline`。
 
 **可以依賴：** 什麼都不依賴。
 
@@ -127,7 +128,7 @@ stairs/
 **負責：**
 - `view.render(state, ui)`：依照 state 和 ui 狀態（見 §3.2）把整個畫面重畫一次。包含 SPEC §5 的版面、空狀態、F3 的三種步驟外觀、進度條、慶祝彈窗、無法儲存提示。
 - 事件：用事件委派（listener 掛在外層容器），把使用者的動作翻成 `handlers` 的呼叫，例如 `handlers.onCheck(stepId)`。
-- `view.confirm(message, onYes)`：顯示自己做的確認視窗（不用瀏覽器內建 `confirm()`，見 §6 A1）。使用者按「確定」才呼叫 `onYes`；按「取消」、Esc、點外面都只關掉視窗。確認視窗和慶祝彈窗共用同一套 dialog 做法（`role="dialog"`、焦點移動、Esc、點外面關閉、關掉後焦點回去）。
+- `view.confirm(message, onYes, labels)`（v1.9 加 `labels`：`{ yes, no }`，預設「確定／取消、焦點在取消」；`no: null` 表示只有一顆 `yes` 按鈕，焦點在它上面。F11「已加入」用 `{ yes: "知道了", no: null }`，「重新加入」用 `{ yes: "下載新的", no: "取消" }`）：顯示自己做的確認視窗（不用瀏覽器內建 `confirm()`，見 §6 A1）。使用者按「確定」才呼叫 `onYes`；按「取消」、Esc、點外面都只關掉視窗。確認視窗和慶祝彈窗共用同一套 dialog 做法（`role="dialog"`、焦點移動、Esc、點外面關閉、關掉後焦點回去）。
 - 焦點保存與還原（見 §3.4）。
 - 無障礙（SPEC §6）：`aria-label`、`disabled`、`title`、dialog 的 role 和焦點。
 - `view.pickDeadline({ mode, value }, onResult)`（v1.6）：用共用 dialog 打開日期時間選單，內容由 `picker.js` 產生。
@@ -154,6 +155,8 @@ stairs/
   - v1.8：抽屜的滑動手勢也在這裡（都是觸控手勢，放一起才能互相讓）。用被動的 `touchstart`／`touchmove`／`touchend`，不用 Pointer Events，因為瀏覽器開始捲動時會送 `pointercancel` 把手勢切斷。從左邊緣 24px 內開始、往右超過 60px 且橫向為主 → `handlers.onOpenDrawer()`；抽屜開著時在抽屜上往左超過 60px → `handlers.onCloseDrawer()`。步驟正在拖曳時不判斷（§6 A18）。
 - `style.css`：`:root` 的 CSS 變數、`prefers-color-scheme` 深色模式、`< 640px` 手機版面、40×40px 觸控區、彩帶動畫、`prefers-reduced-motion`。
   - v1.6：階梯上限 `--stair-max` 從 `8` 改成 `2`（第 3 階起都縮 2 格）；手機的 `--stair` 從 `6px` 改成 `9px`。
+  - v1.9：view 給每個步驟的 `--i` 改成「從目前這一階算起的位置」：已完成的步驟是 `0`，未完成的是 `i - 已完成數`；CSS 的上限 `--stair-max: 2` 不變（SPEC §5.3）。
+  - v1.9：改名輸入框第一次出現時，view 用 `setSelectionRange(長度, 長度)` 把游標放在最後，不再 `select()`（SPEC F7）。
   - v1.6：`body` 下方留出切換欄位的高度加上 `env(safe-area-inset-bottom)`；`index.html` 的 viewport 要加 `viewport-fit=cover`，`env()` 在 iPhone 上才有值。（v1.8 起留的是左下角 ≡ 按鈕的空間。）
   - v1.8：拿掉兩欄 grid 和 `< 640px` 上下排列；`.main` 水平置中，電腦和手機同一種版面，手機只有邊距較小。
 
@@ -179,7 +182,7 @@ stairs/
 - 什麼時候打開日期時間選單（v1.6，SPEC F1、F8）：
   - `onCreateProject(name)`：名稱去空白後是空的 → 什麼都不做。否則 `view.pickDeadline({ mode: "create", value: null }, (d) => …)`，在回呼裡 `dispatch(createProject, name, d)`、`view.clearDraft("add-project")`、`ui.tab = "open"`。
   - `onEditDeadline()`：`view.pickDeadline({ mode: "edit", value: 目前的 deadline }, (d) => dispatch(setDeadline, pid, d))`。
-- `onAddToCalendar()`（v1.7，SPEC F11）：`text = Stairs.state.toIcs(目前的專案)`，`null` 就什麼都不做；檔名把專案名稱裡不能當檔名的字元換成 `_`，再呼叫 `view.download`。不改 state、不存檔。
+- `onAddToCalendar()`（v1.7，SPEC F11；v1.9 分三種狀態）：`calendarDeadline` 是 `null` → 直接下載；等於 `deadline` → `view.confirm` 說明「要自己到行事曆取消」，按「知道了」→ `dispatch(clearCalendarAdded)`；不同 → `view.confirm` 說明「舊的要自己刪」，按「下載新的」才下載。下載 = `text = Stairs.state.toIcs(目前的專案)`（`null` 就什麼都不做），然後 `dispatch(markCalendarAdded)`；檔名把專案名稱裡不能當檔名的字元換成 `_`，再呼叫 `view.download`。
 - 決定操作後焦點要去哪（例如新增步驟後回到輸入框）。
 
 **可以依賴：** 資料邏輯層、儲存層、畫面層。
@@ -221,7 +224,7 @@ stairs/
 | 欄位 | 型別 | 意思 |
 |---|---|---|
 | `editing` | `{ kind: "project" \| "step", id }` 或 `null` | 哪個名稱正在改名。 |
-| `celebrate` | `{ projectName, hasDeadline }` 或 `null` | 慶祝彈窗是否打開。`hasDeadline`（v1.8）決定要不要顯示「記得到行事曆刪掉」那行（SPEC F5）。 |
+| `celebrate` | `{ projectName }` 或 `null` | 慶祝彈窗是否打開。（v1.8 加的 `hasDeadline` 在 v1.9 拿掉，慶祝畫面不再提行事曆，見 §6 A20。） |
 | `drawer` | boolean | 專案列表抽屜開著嗎（SPEC F12，v1.8）。啟動時是 `false`，不存檔。 |
 | `storageWarning` | boolean | 是否顯示「無法儲存，重新整理後資料會消失」。 |
 | `focusKey` | string 或 `null` | 重畫後要把焦點放在哪（見 §3.4）。 |
@@ -334,4 +337,5 @@ stairs/
 | A17 | 隱藏式專案列表（SPEC v1.8 F12）只給手機用，還是電腦也用？怎麼做？ | 使用者希望畫面中間只放目前的專案，保持整潔。 | **電腦和手機都用**，只有一種版面。抽屜一直在 DOM 裡、用 `ui.drawer` 開關，開關的滑動交給既有的 View Transitions；關著時 `inert`，開著時後面的 `.main` 和 ≡ 按鈕 `inert`。 |
 | A18 | 左邊緣右滑要怎麼偵測？ | Pointer Events 在瀏覽器開始捲動時會被 `pointercancel` 切斷；iPhone Safari 分頁的左邊緣右滑是「上一頁」。 | **在 `drag.js` 用被動的 touch 事件**判斷：從左邊 24px 內開始、往右超過 60px、橫向為主才打開；步驟拖曳中不判斷。Safari 分頁可能被「上一頁」搶走，這點寫進 SPEC F12，主畫面 App 不受影響，≡ 按鈕永遠可用。 |
 | A19 | 抽屜收起來後，未完成／已完成切換放哪？ | A15 原本固定在畫面最下面正中間；收起列表後，切換看不到它在換什麼。 | **搬進抽屜最下面**（`position: sticky` 貼底）。**取代 A15。** 畫面最下面只剩左下角的 ≡。 |
-| A20 | 專案完成後能不能自動刪掉 iPhone 行事曆裡的事件？ | 網頁沒有權限動行事曆；要自動同步必須有伺服器（訂閱網址），違反 SPEC §2。下載「取消事件」檔，iPhone 行事曆也不會處理。 | **不刪，改成提醒**：有截止日期的專案完成時，慶祝畫面多一行「記得到行事曆刪掉」（SPEC v1.8 F5）。`ui.celebrate` 多帶 `hasDeadline`。 |
+| A20 | 專案完成後能不能自動刪掉 iPhone 行事曆裡的事件？（**v1.9 起慶祝畫面不再提醒**，見 A21） | 網頁沒有權限動行事曆；要自動同步必須有伺服器（訂閱網址），違反 SPEC §2。下載「取消事件」檔，iPhone 行事曆也不會處理。 | **不刪，改成提醒**：有截止日期的專案完成時，慶祝畫面多一行「記得到行事曆刪掉」（SPEC v1.8 F5）。`ui.celebrate` 多帶 `hasDeadline`。 |
+| A21 | F11 怎麼記住「加過行事曆」？（SPEC v1.9） | 使用者分不清楚自己加過沒；改了截止日期之後，行事曆裡是舊的時間。 | **存最後一次下載時的截止日期 `calendarDeadline`**，不是布林值：`null` = 沒加過、等於 `deadline` = 已加入、不同 = 要重新加入。它只代表「下載過」，Stairs 無法知道使用者最後有沒有真的存進行事曆。按「已加入」的說明只有「知道了」，按下後清成 `null`，按鈕回到「加入行事曆」（使用者的選擇：看完說明就當作自己會去處理）；Esc、點外面不清。使用者要把完成的事件留在行事曆裡，所以拿掉 A20 的慶祝畫面提醒。 |

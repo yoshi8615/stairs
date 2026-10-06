@@ -64,6 +64,7 @@ Stairs.tests = (() => {
     createdAt: 0,
     deadline: null,
     completedAt: pattern.length > 0 && !pattern.includes("□") ? 1 : null,
+    calendarDeadline: null,
     steps: Array.from(pattern).map((c, i) => ({ id: `${id}_s${i + 1}`, title: `步驟${i + 1}`, done: c === "✓" })),
     ...extra,
   });
@@ -89,6 +90,8 @@ Stairs.tests = (() => {
       assert(complete ? typeof p.completedAt === "number" : p.completedAt === null,
         `專案 ${p.id} 違反不變式第二條：完成=${complete}、completedAt=${p.completedAt}`);
       assert(p.deadline === null || typeof p.deadline === "string", `專案 ${p.id} 的 deadline 型別不對`);
+      // P8T1
+      assert(p.calendarDeadline === null || typeof p.calendarDeadline === "string", `專案 ${p.id} 的 calendarDeadline 型別不對`);
     }
     if (state.projects.length) {
       assert(state.projects.some((p) => p.id === state.activeProjectId), "activeProjectId 必須指向存在的專案");
@@ -344,7 +347,7 @@ Stairs.tests = (() => {
   };
   const rawStep = (id, done, title = id) => ({ id, title, done });
   const rawProject = (id, steps, extra = {}) =>
-    ({ id, name: id, createdAt: 1, deadline: null, completedAt: null, steps, ...extra });
+    ({ id, name: id, createdAt: 1, deadline: null, completedAt: null, calendarDeadline: null, steps, ...extra });
 
   test("P1T6 normalize：最外層壞掉 → 空資料", () => {
     const bads = [
@@ -620,6 +623,52 @@ Stairs.tests = (() => {
       assert(enc.encode(line).length <= 75, `超過 75 bytes：${line}`);
     }
     assert(icsLine(ics, "SUMMARY") === `SUMMARY:截止：${name}`);
+  });
+
+  // P8T1: calendarDeadline (SPEC v1.9 F11, A21)
+  test("P8T1 createProject：calendarDeadline 是 null", () => {
+    const s = apply(S.emptyState(), (x) => S.createProject(x, "新", "2026-10-05T16:00"));
+    assert(s.projects[0].calendarDeadline === null);
+  });
+
+  test("P8T1 markCalendarAdded：設成目前的 deadline；沒截止日期或已相同 → 同一個 state", () => {
+    const s0 = stateOf(proj("p", "□", { deadline: "2026-10-05T16:00" }), proj("q", "□"));
+    const s1 = apply(s0, (s) => S.markCalendarAdded(s, "p"));
+    assert(s1.projects[0].calendarDeadline === "2026-10-05T16:00");
+    assert(apply(s1, (s) => S.markCalendarAdded(s, "p")) === s1, "已相同應回傳同一個 state");
+    assert(apply(s0, (s) => S.markCalendarAdded(s, "q")) === s0, "沒截止日期應回傳同一個 state");
+    assert(apply(s0, (s) => S.markCalendarAdded(s, "nope")) === s0);
+  });
+
+  test("P8T1 clearCalendarAdded：清成 null；已經是 null → 同一個 state", () => {
+    const s0 = stateOf(proj("p", "□", { deadline: "2026-10-05T16:00", calendarDeadline: "2026-10-05T16:00" }));
+    const s1 = apply(s0, (s) => S.clearCalendarAdded(s, "p"));
+    assert(s1.projects[0].calendarDeadline === null);
+    assert(apply(s1, (s) => S.clearCalendarAdded(s, "p")) === s1);
+  });
+
+  test("P8T1 改截止日期、清除截止日期都不動 calendarDeadline", () => {
+    const s0 = stateOf(proj("p", "□", { deadline: "2026-10-05T16:00", calendarDeadline: "2026-10-05T16:00" }));
+    const s1 = apply(s0, (s) => S.setDeadline(s, "p", "2026-10-07T09:00"));
+    assert(s1.projects[0].calendarDeadline === "2026-10-05T16:00");
+    const s2 = apply(s1, (s) => S.setDeadline(s, "p", null));
+    assert(s2.projects[0].calendarDeadline === "2026-10-05T16:00");
+  });
+
+  test("P8T1 normalize：沒有欄位 → null；壞掉 → null 且專案還在；好的保留", () => {
+    const raw = {
+      version: 1,
+      activeProjectId: "a",
+      projects: [
+        { id: "a", name: "a", createdAt: 1, deadline: null, completedAt: null, steps: [] },
+        rawProject("b", [], { calendarDeadline: "2026-02-30T10:00" }),
+        rawProject("c", [], { calendarDeadline: 5 }),
+        rawProject("d", [], { deadline: "2026-10-05T16:00", calendarDeadline: "2026-10-05T16:00" }),
+      ],
+    };
+    const s = normalizeOk(raw);
+    assertEqual(s.projects.map((p) => p.id), ["a", "b", "c", "d"]);
+    assertEqual(s.projects.map((p) => p.calendarDeadline), [null, null, null, "2026-10-05T16:00"]);
   });
 })();
 

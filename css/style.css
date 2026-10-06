@@ -408,6 +408,11 @@ body {
 }
 
 /* P7T5: F8 deadline button; P7T9: the calendar button shares the row */
+/* P8T2: "已加入行事曆" reads as done, in the accent color */
+.deadline-btn.calendar-added {
+  color: var(--accent);
+}
+
 .deadline-row {
   display: flex;
   flex-wrap: wrap;
@@ -719,13 +724,6 @@ body.is-dragging {
   overflow-wrap: anywhere;
 }
 
-/* P7T11: calendar reminder under the project name */
-.celebrate-note {
-  position: relative;
-  margin: -12px 0 20px;
-  color: var(--muted);
-  font-size: 0.8rem;
-}
 
 /* P3T9: pure CSS confetti, about 2 seconds */
 .confetti {
